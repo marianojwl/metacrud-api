@@ -3,3 +3,4 @@
 config/.env
 config/.env.local
 config/env.php
+sql.php
