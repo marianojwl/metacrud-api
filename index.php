@@ -4,8 +4,9 @@ include_once(__DIR__ . '/config/headers.php');
 include_once(__DIR__ . '/config/env.php');
 
 // Session
-@session_start();
-//$_SESSION['USER_ROLES'] = [1,2];
+if(file_exists(__DIR__ . '/' . $_ENV['SESSION_FILE'])){
+  include_once(__DIR__ . '/' . $_ENV['SESSION_FILE']);
+}
 
 // Functions
 function getColumns($pdo, $tablename){
