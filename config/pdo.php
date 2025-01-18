@@ -1,2 +1,2 @@
 <?php
-$pdo = new PDO("mysql:host={$_ENV['DB_HOST']};dbname={$_ENV['DB_NAME']}", $_ENV['DB_USER'], $_ENV['DB_PASS']);
+$pdo = new PDO("mysql:host={$_ENV['METACRUD_DB_HOST']};dbname={$_ENV['METACRUD_DB_NAME']}", $_ENV['METACRUD_DB_USER'], $_ENV['METACRUD_DB_PASS']);
