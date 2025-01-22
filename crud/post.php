@@ -13,6 +13,10 @@ foreach($columns as $column){
     continue; // skip this column (id)
   }
 
+  if(!isset($input[$column['Field']])){
+    continue;
+  }
+
   $sql_p1 .= $column['Field'] . ',';
   $sql_p2 .= ':' . $column['Field'] . ',';
 
@@ -35,6 +39,9 @@ foreach($columns as $column){
     continue;
   }
 
+  if(!isset($input[$column['Field']])){
+    continue;
+  }
   $stmt->bindValue(':' . $column['Field'], $input[$column['Field']]);
 }
 

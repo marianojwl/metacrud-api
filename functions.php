@@ -45,7 +45,7 @@ function validateInputField($column, $input){
   }
 
   // CHECK IF REQUIRED
-  if($column['Null'] == 'NO' && !isset($input[$column['Field']])){
+  if(( $column['Null'] == 'NO' && empty($column['Default']) ) && !isset($input[$column['Field']])){
     echo json_encode(['error' => $column['Field'] . ' is required']);
     http_response_code(400);
     exit;
