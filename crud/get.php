@@ -22,6 +22,21 @@ function getForeignPairs($columns){
   return $pairs;
 }
 
+function getFilters($columns){
+  $filters = [];
+  foreach($columns as $column){
+   if(isset($_GET[$column['Field']])) {
+    // if is array
+    if(is_array($_GET[$column['Field']])) {
+      $filters[$column['Field']] = $_GET[$column['Field']];
+    }
+   }
+  }
+  return $filters;
+}
+
+$filters = getFilters($columns);
+
 
 $foreignPairs = getForeignPairs($columns);
 
@@ -68,6 +83,24 @@ if($requested_id){
     $sql = rtrim($sql, ' OR ');
   }
 
+  if(count($filters)){
+    // if WHERE has not been added, add it
+    if(strpos($sql, ' WHERE ') === false){
+      $sql.= " WHERE ";
+    } else {
+      $sql.= " AND ";
+    }
+    foreach($filters as $field => $values){
+      $sql.= $tablename.".".$field . " IN (";
+      foreach($values as $value){
+        $sql.= ":$field$value, ";
+      }
+      $sql = rtrim($sql, ', ');
+      $sql.= ") AND ";
+    }
+    $sql = rtrim($sql, ' AND ');
+  }
+
   $sql.= " ORDER BY $sortField $sortOrder LIMIT :limit, :offset";
   $stmt = $pdo->prepare($sql);
   $stmt->bindValue(':limit', ($page - 1) * $limit, PDO::PARAM_INT);
@@ -75,10 +108,19 @@ if($requested_id){
   if($search) {
     $stmt->bindValue(':search', "%$search%");
   }
+  foreach($filters as $field => $values){
+    foreach($values as $value){
+      $stmt->bindValue(":$field$value", $value);
+    }
+  }
 }
+
+
 
 $stmt->execute();
 
 $records = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-echo json_encode(["data"=>$records]);
+$request_uri = $_SERVER['REQUEST_URI'];
+
+echo json_encode(["data"=>["rows"=>$records, "request_uri"=>$request_uri]]);
