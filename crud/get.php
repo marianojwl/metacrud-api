@@ -5,7 +5,39 @@ $sortField = $_GET['sort'] ?? 1;
 $sortOrder = $_GET['order'] ?? 'asc';
 $cols = $_GET['cols'] ?? null;
 $search = $_GET['search'] ?? null;
+$metacrudView = $_GET['metacrudView'] ?? null;
 
+$tableStatus = null;
+
+$view = null;
+
+if($metacrudView) {
+  $tableStatus = getTableStatus($pdo, $tablename); 
+  $view = $tableStatus['Comment']['metacrud']['views'][$metacrudView]??null;
+}
+
+/*
+{ "statement":"SUM(totalsalesprice.Total)", "alias":"TotalSalesPriceSum", "isAggregate":true }
+
+joints:
+LEFT JOIN ewave_cca.totalsalesprice ON totalsalesprice.Pelicula = shows.ShortName
+*/
+/*
+$view = [
+  "expressions"=>[
+    [
+      "statement"=> "CONCAT('[',GROUP_CONCAT(DISTINCT CONCAT('\"', shows.ShortName, '\"') SEPARATOR ', '),']')",
+      "alias"=> "Shows_JSON",
+      "isAggregate"=> true
+    ]
+      
+  ],
+  "joints"=>[
+    "LEFT JOIN peliculas_shows ON adm_facturas_distribuidoras.pelicula_id = peliculas_shows.pelicula_id",
+    "LEFT JOIN ewave_cca.shows ON peliculas_shows.ewave_shows_ShowId = shows.ShowId"
+  ]
+];
+*/
 // 	{ "metacrud":{ "label":"ID Categoría", "regex_pattern":"^[0-9]+$", "foreign_key":"cm_categorias.categoria_id", "foreign_value":"cm_categorias.categoria" } }
 
 $columns = getColumns($pdo, $tablename);
@@ -49,6 +81,10 @@ foreach($columns as $column){
   $sql.= $tablename.".".$column['Field'] . ", ";
 }
 
+foreach($view['expressions']??[] as $expression){
+  $sql.= $expression['statement'] . " AS " . $expression['alias'] . ", ";
+}
+
 $sql = rtrim($sql, ', ');
 
 foreach($foreignPairs as $field => $pair){
@@ -62,6 +98,10 @@ foreach($foreignPairs as $field => $pair){
   $tab = $parts[1];
   $db = $parts[2]??null;
   $sql.= " LEFT JOIN ". ($db ? "$db." : "") . "$tab ON $tablename.$field = $tab.$col";
+}
+
+foreach($view['joints']??[] as $joint){
+  $sql.= " $joint ";
 }
 
 if($requested_id){
@@ -101,6 +141,32 @@ if($requested_id){
     $sql = rtrim($sql, ' AND ');
   }
 
+  // check if any of the expressions in view has an aggregate function
+  $hasAggregate = false;
+  foreach($view['expressions']??[] as $expression){
+    if($expression['isAggregate']){
+      $hasAggregate = true;
+      break;
+    }
+  }
+
+  if($hasAggregate){
+    $sql.= " GROUP BY ";
+    foreach($columns as $column){
+      $sql.= $tablename.".".$column['Field'] . ", ";
+    }
+    foreach($foreignPairs as $field => $pair){
+      $sql.= $pair['value'] . ", ";
+    }
+    foreach($view['expressions']??[] as $expression){
+      if(!$expression['isAggregate']){
+        $sql.= $expression['statement'] . ", ";
+      }
+    }
+        
+    $sql = rtrim($sql, ', ');
+  }
+
   $sql.= " ORDER BY $sortField $sortOrder LIMIT :limit, :offset";
   $stmt = $pdo->prepare($sql);
   $stmt->bindValue(':limit', ($page - 1) * $limit, PDO::PARAM_INT);
@@ -121,6 +187,16 @@ $stmt->execute();
 
 $records = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+// decode all columns ending with _JSON
+$records = array_map(function($record) use ($columns){
+  foreach($record as $key => $value){
+    if(strpos($key, '_JSON') !== false){
+      $record[$key] = json_decode($value, true);
+    }
+  }
+  return $record;
+}, $records);
+
 $request_uri = $_SERVER['REQUEST_URI'];
 
-echo json_encode(["data"=>["rows"=>$records, "request_uri"=>$request_uri]]);
+echo json_encode(["data"=>["query"=>$sql, "view"=>$metacrudView, "rows"=>$records, "request_uri"=>$request_uri]]);
