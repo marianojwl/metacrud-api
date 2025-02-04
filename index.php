@@ -40,6 +40,26 @@ switch($resource){
       echo json_encode(['data' => getTableStatus($pdo, $tablename)]);
       exit;
     }
+
+    if($controller == 'column'){
+      try {
+        include_once(__DIR__ . "/meta/column.php");
+      } catch (Exception $e) {
+          echo json_encode(['success'=>false, 'error' => $e->getMessage()]);
+          http_response_code(400);
+      }
+      exit;
+    }
+
+    if($controller == 'setTableComment'){
+      try {
+        include_once(__DIR__ . "/meta/setTableComment.php");
+      } catch (Exception $e) {
+          echo json_encode(['success'=>false, 'error' => $e->getMessage()]);
+          http_response_code(400);
+      }
+      exit;
+    }
       
     break;
 case 'crud':

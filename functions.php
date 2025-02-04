@@ -32,6 +32,14 @@ function getTableStatus($pdo, $tablename){
 
   $table['Comment'] = json_decode($table['Comment'], true);
 
+  if(isset($table['Comment']['metacrud']['file'])){
+    try{
+      $table['Comment']['metacrud'] = json_decode( file_get_contents($table['Comment']['metacrud']['file']), true);
+    } catch(Exception $e){
+      $table['Comment']['metacrud'] = [];
+    }
+  }
+
   return $table;
 }
 

@@ -81,8 +81,8 @@ foreach($columns as $column){
   $sql.= $tablename.".".$column['Field'] . ", ";
 }
 
-foreach($view['expressions']??[] as $expression){
-  $sql.= $expression['statement'] . " AS " . $expression['alias'] . ", ";
+foreach($view['columns']??[] as $expression){
+  $sql.= $expression['s'] . " AS " . $expression['a'] . ", ";
 }
 
 $sql = rtrim($sql, ', ');
@@ -141,9 +141,22 @@ if($requested_id){
     $sql = rtrim($sql, ' AND ');
   }
 
+  if(count($view['conditions']??[])){
+    // if WHERE has not been added, add it
+    if(strpos($sql, ' WHERE ') === false){
+      $sql.= " WHERE ";
+    } else {
+      $sql.= " AND ";
+    }
+    foreach($view['conditions'] as $condition){
+      $sql.= $condition . " AND ";
+    }
+    $sql = rtrim($sql, ' AND ');
+  }
+
   // check if any of the expressions in view has an aggregate function
   $hasAggregate = false;
-  foreach($view['expressions']??[] as $expression){
+  foreach($view['columns']??[] as $expression){
     if($expression['isAggregate']){
       $hasAggregate = true;
       break;
@@ -158,9 +171,9 @@ if($requested_id){
     foreach($foreignPairs as $field => $pair){
       $sql.= $pair['value'] . ", ";
     }
-    foreach($view['expressions']??[] as $expression){
+    foreach($view['columns']??[] as $expression){
       if(!$expression['isAggregate']){
-        $sql.= $expression['statement'] . ", ";
+        $sql.= $expression['s'] . ", ";
       }
     }
         
