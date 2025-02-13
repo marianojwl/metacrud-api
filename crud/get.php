@@ -11,10 +11,14 @@ $tableStatus = null;
 
 $view = null;
 
+$tableStatus = getTableStatus($pdo, $tablename); 
+
 if($metacrudView) {
-  $tableStatus = getTableStatus($pdo, $tablename); 
   $view = $tableStatus['Comment']['metacrud']['views'][$metacrudView]??null;
 }
+
+// read restrictions
+$restrictions = $tableStatus['Comment']['metacrud']['restrictions']['read']??[];
 
 /*
 { "statement":"SUM(totalsalesprice.Total)", "alias":"TotalSalesPriceSum", "isAggregate":true }
@@ -74,6 +78,10 @@ $foreignPairs = getForeignPairs($columns);
 
 $sql = "SELECT ";
 
+if($view['distinct']??false){
+  $sql.= "DISTINCT ";
+}
+
 foreach($columns as $column){
   if($cols){
     if(!in_array($column['Field'], $cols)) continue;
@@ -111,9 +119,15 @@ if($requested_id){
   $stmt->bindValue(':id', $requested_id);
 
 } else {
+//if(true) {
 
   if($search){
-    $sql.= " WHERE ";
+    // if WHERE has not been added, add it
+    if(strpos($sql, ' WHERE ') === false){
+      $sql.= " WHERE ";
+    } else {
+      $sql.= " AND ";
+    }
     foreach($columns as $column){
       $sql.= $tablename.".".$column['Field'] . " LIKE :search OR ";
     }
@@ -154,6 +168,28 @@ if($requested_id){
     $sql = rtrim($sql, ' AND ');
   }
 
+  if(count($restrictions)){
+    // if WHERE has not been added, add it
+    if(strpos($sql, ' WHERE ') === false){
+      $sql.= " WHERE ";
+    } else {
+      $sql.= " AND ";
+    }
+    foreach($restrictions as $field => $value){
+      if(is_string($value)){
+        $sql.= $tablename.".".$field . " = :$field AND ";
+      } else {
+        $sql.= $tablename.".".$field . " IN (";
+        foreach($value as $v){
+          $sql.= ":$field$v, ";
+        }
+        $sql = rtrim($sql, ', ');
+        $sql.= ") AND ";
+      }
+    }
+    $sql = rtrim($sql, ' AND ');
+  }
+
   // check if any of the expressions in view has an aggregate function
   $hasAggregate = false;
   foreach($view['columns']??[] as $expression){
@@ -190,6 +226,16 @@ if($requested_id){
   foreach($filters as $field => $values){
     foreach($values as $value){
       $stmt->bindValue(":$field$value", $value);
+    }
+  }
+
+  foreach($restrictions as $field => $value){
+    if(is_string($value)){
+      $stmt->bindValue(":$field", $value);
+    } else {
+      foreach($value as $v){
+        $stmt->bindValue(":$field$v", $v);
+      }
     }
   }
 }

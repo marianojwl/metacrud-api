@@ -40,6 +40,31 @@ function getTableStatus($pdo, $tablename){
     }
   }
 
+  // replace with session values , eg:   { "metacrud": {"restrictions":{"create": { "cine_id":"$_SESSION.Cinemacenter-INTRANET.metacrud.gerente_en_cine_ids" }  } } }
+  if(isset($table['Comment']['metacrud']['restrictions'])){
+    foreach($table['Comment']['metacrud']['restrictions'] as $action => $restrictions){
+      foreach($restrictions as $field => $value){
+        // if $value is a string
+        if(is_string($value)){     
+          if(strpos($value, '$_SESSION') === 0){
+            $parts = explode('.', $value);
+            // remove first element
+            array_shift($parts);
+            $session = $_SESSION;
+            foreach($parts as $part){
+              $session = $session[$part];
+            }
+            $table['Comment']['metacrud']['restrictions'][$action][$field] = $session;
+          } else {
+            $table['Comment']['metacrud']['restrictions'][$action][$field] = $value;
+          }
+        } else {
+          $table['Comment']['metacrud']['restrictions'][$action][$field] = $value;
+        } 
+      }
+    }
+  }
+
   return $table;
 }
 
