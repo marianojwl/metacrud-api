@@ -34,7 +34,8 @@ function getTableStatus($pdo, $tablename){
 
   if(isset($table['Comment']['metacrud']['file'])){
     try{
-      $table['Comment']['metacrud'] = json_decode( file_get_contents($table['Comment']['metacrud']['file']), true);
+      $fullpath = $_ENV['METACRUD_META_FILES_BASE_DIR'] . $table['Comment']['metacrud']['file'];
+      $table['Comment']['metacrud'] = json_decode( file_get_contents($fullpath), true);
     } catch(Exception $e){
       $table['Comment']['metacrud'] = [];
     }

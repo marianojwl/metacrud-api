@@ -6,6 +6,7 @@ $sortOrder = $_GET['order'] ?? 'asc';
 $cols = $_GET['cols'] ?? null;
 $search = $_GET['search'] ?? null;
 $metacrudView = $_GET['metacrudView'] ?? null;
+$queryDistinct = ($_GET['distinct']??"") == "true" ?? false;
 
 $tableStatus = null;
 
@@ -15,6 +16,10 @@ $tableStatus = getTableStatus($pdo, $tablename);
 
 if($metacrudView) {
   $view = $tableStatus['Comment']['metacrud']['views'][$metacrudView]??null;
+  if(!$view) {
+    echo json_encode(["success"=>false,"error"=>"View not found"]);
+    exit();
+  }
 }
 
 // read restrictions
@@ -78,7 +83,7 @@ $foreignPairs = getForeignPairs($columns);
 
 $sql = "SELECT ";
 
-if($view['distinct']??false){
+if(($view['distinct']??false) || $queryDistinct ){
   $sql.= "DISTINCT ";
 }
 
@@ -134,6 +139,10 @@ if($requested_id){
     foreach($foreignPairs as $field => $pair){
       $sql.= $pair['value']." LIKE :search OR ";
     }
+    // look also in view columns
+    foreach($view['columns']??[] as $expression){
+      $sql.= $expression['s'] . " LIKE :search OR ";
+    }
     $sql = rtrim($sql, ' OR ');
   }
 
@@ -169,22 +178,31 @@ if($requested_id){
   }
 
   if(count($restrictions)){
-    // if WHERE has not been added, add it
-    if(strpos($sql, ' WHERE ') === false){
-      $sql.= " WHERE ";
-    } else {
-      $sql.= " AND ";
-    }
     foreach($restrictions as $field => $value){
       if(is_string($value)){
+        // if WHERE has not been added, add it
+        if(strpos($sql, ' WHERE ') === false){ $sql.= " WHERE "; } else { $sql.= " AND "; }
+
         $sql.= $tablename.".".$field . " = :$field AND ";
       } else {
-        $sql.= $tablename.".".$field . " IN (";
-        foreach($value as $v){
-          $sql.= ":$field$v, ";
+        if(count($value)) {
+          // if WHERE has not been added, add it
+          if(strpos($sql, ' WHERE ') === false){ $sql.= " WHERE "; } else { $sql.= " AND "; }
+
+          if(strpos($field, '.') === false){
+            $sql.= $tablename.".".$field;
+          } else {
+            $sql.= $field;
+          }
+          $sql .= " IN (";
+          foreach($value as $v){
+            $fieldv = str_replace('.', '_', $field).$v;
+            $sql.= ":$fieldv, ";
+            //$sql.= ":$field$v, ";
+          }
+          $sql = rtrim($sql, ', ');
+          $sql.= ") AND ";
         }
-        $sql = rtrim($sql, ', ');
-        $sql.= ") AND ";
       }
     }
     $sql = rtrim($sql, ' AND ');
@@ -234,13 +252,14 @@ if($requested_id){
       $stmt->bindValue(":$field", $value);
     } else {
       foreach($value as $v){
-        $stmt->bindValue(":$field$v", $v);
+        $fieldv = str_replace('.', '_', $field).$v;
+        $stmt->bindValue(":$fieldv", $v);
       }
     }
   }
 }
 
-
+//echo json_encode(["data"=>["query"=>$sql, "view"=>$metacrudView]]); die();
 
 $stmt->execute();
 
