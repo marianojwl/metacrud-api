@@ -87,11 +87,17 @@ if(($view['distinct']??false) || $queryDistinct ){
   $sql.= "DISTINCT ";
 }
 
-foreach($columns as $column){
-  if($cols){
-    if(!in_array($column['Field'], $cols)) continue;
-  } 
-  $sql.= $tablename.".".$column['Field'] . ", ";
+if(($view['selectRegularColumns']??true)){
+  foreach($columns as $column){
+    if($cols){
+      if(!in_array($column['Field'], $cols)) continue;
+    } 
+    $sql.= $tablename.".".$column['Field'] . ", ";
+  }
+
+  foreach($foreignPairs as $field => $pair){
+    $sql.= $pair['value']." AS ". str_replace('.', '_', $pair['value']) . ", ";
+  }
 }
 
 foreach($view['columns']??[] as $expression){
@@ -100,9 +106,6 @@ foreach($view['columns']??[] as $expression){
 
 $sql = rtrim($sql, ', ');
 
-foreach($foreignPairs as $field => $pair){
-  $sql.= ", ".$pair['value']." AS ". str_replace('.', '_', $pair['value']);
-}
 $sql.= " FROM $tablename "; 
 
 foreach($foreignPairs as $field => $pair){
@@ -219,11 +222,13 @@ if($requested_id){
 
   if($hasAggregate){
     $sql.= " GROUP BY ";
-    foreach($columns as $column){
-      $sql.= $tablename.".".$column['Field'] . ", ";
-    }
-    foreach($foreignPairs as $field => $pair){
-      $sql.= $pair['value'] . ", ";
+    if(($view['selectRegularColumns']??true)){
+      foreach($columns as $column){
+        $sql.= $tablename.".".$column['Field'] . ", ";
+      }
+      foreach($foreignPairs as $field => $pair){
+        $sql.= $pair['value'] . ", ";
+      }
     }
     foreach($view['columns']??[] as $expression){
       if(!$expression['isAggregate']){
@@ -267,9 +272,14 @@ $records = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // decode all columns ending with _JSON
 $records = array_map(function($record) use ($columns){
-  foreach($record as $key => $value){
-    if(strpos($key, '_JSON') !== false){
-      $record[$key] = json_decode($value, true);
+  // foreach($record as $key => $value){
+  //   if(strpos($key, '_JSON') !== false){
+  //     $record[$key] = json_decode($value, true);
+  //   }
+  // }
+  foreach($columns as $column){
+    if(strpos($column['Field'], '_JSON') !== false || $column['Type'] == 'json'){
+      $record[$column['Field']] = json_decode($record[$column['Field']], true);
     }
   }
   return $record;
