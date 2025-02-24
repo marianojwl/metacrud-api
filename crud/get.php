@@ -270,15 +270,23 @@ $stmt->execute();
 
 $records = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+$columnsAndViewColumns = array_merge(
+  $columns, 
+  array_map(function($c) { 
+      return array_merge($c, ["Field" => $c["a"] ?? null, "Type" => ""]); 
+  }, $view['columns'] ?? [])
+);
+
+
 // decode all columns ending with _JSON
-$records = array_map(function($record) use ($columns){
+$records = array_map(function($record) use ($columnsAndViewColumns){
   // foreach($record as $key => $value){
   //   if(strpos($key, '_JSON') !== false){
   //     $record[$key] = json_decode($value, true);
   //   }
   // }
-  foreach($columns as $column){
-    if(strpos($column['Field'], '_JSON') !== false || $column['Type'] == 'json'){
+  foreach($columnsAndViewColumns as $column){
+    if( (strpos($column['Field'], '_JSON') !== false) || $column['Type'] == 'json'){
       $record[$column['Field']] = json_decode($record[$column['Field']], true);
     }
   }

@@ -115,3 +115,20 @@ function hasPermission($table_meta, $action, $user_roles){
   if(!isset($table_meta['permissions'][$action])) return true;
   return array_intersect($user_roles, $table_meta['permissions'][$action]);
 }
+
+function generateCombinations($arrays, $prefix = []) {
+  if (empty($arrays)) {
+      return [$prefix];
+  }
+  
+  $key = array_key_first($arrays);
+  $values = array_shift($arrays);
+  
+  $result = [];
+  foreach ($values as $value) {
+      $newPrefix = array_merge($prefix, [$key => $value]);
+      $result = array_merge($result, generateCombinations($arrays, $newPrefix));
+  }
+  
+  return $result;
+}

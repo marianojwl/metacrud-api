@@ -89,6 +89,14 @@ case 'crud':
         try {
             include_once(__DIR__ . "/crud/$method.php");
         } catch (Exception $e) {
+            $errorMsg = $e->getMessage();
+            if(strpos($errorMsg, 'SQLSTATE[23000]') !== false){
+                $entryValue = explode("Duplicate entry '", $errorMsg)[1];
+                $entryValue = explode("'", $entryValue)[0];
+                echo json_encode(['success'=>false, 'error' => 'Valor duplicado. "' . $entryValue . '" ya existe en la base de datos.']); 
+                http_response_code(400);
+                exit;
+            }
             echo json_encode(['success'=>false, 'error' => $e->getMessage()]);
             http_response_code(400);
         }
