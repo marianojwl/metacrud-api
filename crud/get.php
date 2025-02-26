@@ -287,7 +287,9 @@ $records = array_map(function($record) use ($columnsAndViewColumns){
   // }
   foreach($columnsAndViewColumns as $column){
     if( (strpos($column['Field'], '_JSON') !== false) || $column['Type'] == 'json'){
-      $record[$column['Field']] = json_decode($record[$column['Field']], true);
+      if(isset($record[$column['Field']])) {
+        $record[$column['Field']] = json_decode($record[$column['Field']], true);
+      }
     }
   }
   return $record;

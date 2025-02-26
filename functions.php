@@ -111,6 +111,40 @@ function getPrimaryKeyName($columns){
     return user_roles?.some(role => table_meta?.permissions[action]?.includes(role));
   };
 */
+function getUserPermissions($userPermissionsVars){
+  // {"metacrud":{"userPermissionsVar":["$_SESSION.Cinemacenter-INTRANET.metacrud.perfiles_ids"], "permissions": { "create": [7], "update":[7], "delete":[7], "read":[7] }}}
+  if(!$userPermissionsVars) return [];
+  $ups = [];
+  foreach($userPermissionsVars as $userPermissionsVar) {
+    $parts = explode('.', $userPermissionsVar);
+    // remove first element
+    array_shift($parts);
+    $userPermissions = $_SESSION;
+    foreach($parts as $part){
+      if(empty($userPermissions[$part])){
+        break; // skip this userPermissionsVar
+      }
+      $userPermissions = $userPermissions[$part];
+    }
+    $ups[] = $userPermissions;
+  }
+  
+  return array_merge(...$ups);
+  // $parts = explode('.', $userPermissionsVar);
+  // // remove first element
+  // array_shift($parts);
+  // $userPermissions = $_SESSION;
+  // foreach($parts as $part){
+  //   if(empty($userPermissions[$part])){
+  //     echo json_encode(['success'=>false, 'error' => $part.' No es un índice válido']);
+  //     http_response_code(401);
+  //     exit;
+  //   }
+  //   $userPermissions = $userPermissions[$part];
+  // }
+  // return $userPermissions;
+}
+
 function hasPermission($table_meta, $action, $user_roles){
   if(!isset($table_meta['permissions'][$action])) return true;
   return array_intersect($user_roles, $table_meta['permissions'][$action]);

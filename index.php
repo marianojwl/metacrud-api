@@ -43,6 +43,8 @@ switch($resource){
 
     if($controller == 'column'){
       try {
+        if(!$_SESSION[$_ENV['METACRUD_IS_ADMIN_SESSION_KEY']])
+          throw new Exception('Permiso denegado.');
         include_once(__DIR__ . "/meta/column.php");
       } catch (Exception $e) {
           echo json_encode(['success'=>false, 'error' => $e->getMessage()]);
@@ -53,6 +55,8 @@ switch($resource){
 
     if($controller == 'setTableComment'){
       try {
+        if(!$_SESSION[$_ENV['METACRUD_IS_ADMIN_SESSION_KEY']])
+          throw new Exception('Permiso denegado.');
         include_once(__DIR__ . "/meta/setTableComment.php");
       } catch (Exception $e) {
           echo json_encode(['success'=>false, 'error' => $e->getMessage()]);
@@ -63,11 +67,14 @@ switch($resource){
       
     break;
 case 'crud':
+  //{"metacrud":{"userPermissionsVars":["$_SESSION.Cinemacenter-INTRANET.metacrud.perfiles_id"], "permissions": { "create": [7], "update":[7], "delete":[7], "read":[7] }}}
     $table_status = getTableStatus($pdo, $tablename);
     $table_meta = $table_status['Comment']['metacrud'] ?? [];
-    $user_roles = $_SESSION[$_ENV['METACRUD_USER_ROLES_SESSION_KEY']] ?? [];
+    $userPermissionsVars = $table_meta['userPermissionsVars'] ?? null;
+    //$userPermissions = $_SESSION[$_ENV['METACRUD_USER_ROLES_SESSION_KEY']] ?? [];
+    $userPermissions = getUserPermissions($userPermissionsVars);
     if($table_meta['permissions']??false) {
-      if(count($user_roles) == 0){
+      if(count($userPermissions) == 0){
         echo json_encode(['success'=>false, 'error' => 'User Roles Undifined']);
         http_response_code(401);
         exit;
@@ -79,8 +86,8 @@ case 'crud':
         'put' => 'update',
         'delete' => 'delete'
       ];
-      if(!hasPermission($table_meta, $actions[$method], $user_roles)){
-        echo json_encode(['success'=>false, 'error' => 'Permission Denied']);
+      if(!hasPermission($table_meta, $actions[$method], $userPermissions)){
+        echo json_encode(['success'=>false, 'error' => 'Permiso denegado.']);
         http_response_code(403);
         exit;
       }

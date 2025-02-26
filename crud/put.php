@@ -37,4 +37,4 @@ foreach($columns as $column){
 
 $stmt->execute();
 
-echo json_encode(['success'=>true, 'message'=>'Record updated']);
+echo json_encode(['success'=>true, 'message'=>'Registro actualizado']);
