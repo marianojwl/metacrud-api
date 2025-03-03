@@ -67,6 +67,7 @@ switch($resource){
       
     break;
 case 'crud':
+case 'upload':
   //{"metacrud":{"userPermissionsVars":["$_SESSION.Cinemacenter-INTRANET.metacrud.perfiles_id"], "permissions": { "create": [7], "update":[7], "delete":[7], "read":[7] }}}
     $table_status = getTableStatus($pdo, $tablename);
     $table_meta = $table_status['Comment']['metacrud'] ?? [];
@@ -92,9 +93,9 @@ case 'crud':
         exit;
       }
     }
-    if(file_exists(__DIR__ . "/crud/$method.php")){
+    if(file_exists(__DIR__ . "/".$resource."/$method.php")){
         try {
-            include_once(__DIR__ . "/crud/$method.php");
+            include_once(__DIR__ . "/".$resource."/$method.php");
         } catch (Exception $e) {
             $errorMsg = $e->getMessage();
             if(strpos($errorMsg, 'SQLSTATE[23000]') !== false){
