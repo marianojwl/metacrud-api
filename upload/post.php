@@ -116,7 +116,6 @@ foreach($filesToUpload as $file){
   }
   // get absolute path
   $uploadPath = str_replace('\\', '/', $uploadPath);
-  $uploadPath = ltrim($uploadPath, '/');
   $uploadPath = str_replace($_SERVER['DOCUMENT_ROOT'], '', $uploadPath);
   $uploadPath = ltrim($uploadPath, '/');
 
