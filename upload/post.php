@@ -105,9 +105,10 @@ $uploadedFiles = [];
 
 // UPLOAD FILES
 foreach($filesToUpload as $file){
-  $uploadPath = $uploadDir . $file['name'];
+  $sanitized_filename = preg_replace('/[^A-Za-z0-9\-_\.]/', '-', $file['name']);
+  $uploadPath = $uploadDir . $sanitized_filename;
   while(file_exists($uploadPath)){
-    $uploadPath = $uploadDir . uniqid() . '_' . $file['name'];
+    $uploadPath = $uploadDir . uniqid() . '_' . $sanitized_filename;
   }
   if(!move_uploaded_file($file['tmp_name'], $uploadPath)){
     echo json_encode(['success'=>false, 'error' => 'Error al subir archivo ' . $file['name']]);
