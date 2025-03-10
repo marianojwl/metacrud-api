@@ -8,7 +8,8 @@ $columnsWithBathCreationAllowed = array_filter($columns, function($column){
 });
 
 $fieldsToInsert= array_filter($columns, function($column) use ($input){
-  return (isset($input[$column['Field']]) && !($column['Key'] == 'PRI' && $column['Extra'] == 'auto_increment'));
+  //return (isset($input[$column['Field']]) && !($column['Key'] == 'PRI' && $column['Extra'] == 'auto_increment'));
+  return (array_key_exists($column['Field'], $input) && !($column['Key'] == 'PRI' && $column['Extra'] == 'auto_increment'));
 });
 
 // check if any contains arrays

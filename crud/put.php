@@ -8,7 +8,7 @@ $sql = "UPDATE $tablename SET ";
 
 foreach($columns as $column){
 
-  if(!isset($input[$column['Field']])) {
+  if(!array_key_exists($column['Field'], $input)) {
     continue; // skip this column
   }
   
@@ -29,10 +29,11 @@ $sql .= " WHERE $primaryKeyName = :$primaryKeyName";
 $stmt = $pdo->prepare($sql);
 
 foreach($columns as $column){
-  if(!isset($input[$column['Field']])) {
+  //if(!isset($input[$column['Field']])) {
+  if(!array_key_exists($column['Field'], $input)) {
     continue; // skip this column
   }
-  $stmt->bindValue(':' . $column['Field'], $input[$column['Field']]);
+  $stmt->bindValue(':' . $column['Field'], $input[$column['Field']===null ? 'NULL' : $column['Field']]);
 }
 
 $stmt->execute();
