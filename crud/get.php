@@ -23,6 +23,7 @@ if($metacrudView) {
 }
 
 // read restrictions
+//$hasReadRestrictions = array_key_exists('read', $tableStatus['Comment']['metacrud']['restrictions']??[]);
 $restrictions = $tableStatus['Comment']['metacrud']['restrictions']['read']??[];
 
 /*
