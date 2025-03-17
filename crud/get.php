@@ -1,19 +1,35 @@
 <?php
+// GET PARAMETERS
 $page = $_GET['page'] ?? 1;
 $limit = $_GET['limit'] ?? 10;
 $sortField = $_GET['sort'] ?? 1;
+$sortRequested = $sortField != 1;
+$sortValidated = !$sortRequested;
 $sortOrder = $_GET['order'] ?? 'asc';
 $cols = $_GET['cols'] ?? null;
 $search = $_GET['search'] ?? null;
 $metacrudView = $_GET['metacrudView'] ?? null;
 $queryDistinct = ($_GET['distinct']??"") == "true" ?? false;
 
+// VALIDATE PARAMETERS
+if(!is_numeric($page) || !is_numeric($limit)){
+  echo json_encode(["success"=>false,"error"=>"Invalid page or limit"]);
+  exit();
+}
+
+if(!in_array($sortOrder, ['asc', 'desc', 'ASC', 'DESC'])){
+  echo json_encode(["success"=>false,"error"=>"Invalid sort order"]);
+  exit();
+}
+
 $tableStatus = null;
 
 $view = null;
 
+// GET TABLE STATUS
 $tableStatus = getTableStatus($pdo, $tablename); 
 
+// CHECK IF THE REQUESTED VIEW EXISTS
 if($metacrudView) {
   $view = $tableStatus['Comment']['metacrud']['views'][$metacrudView]??null;
   if(!$view) {
@@ -22,37 +38,14 @@ if($metacrudView) {
   }
 }
 
-// read restrictions
-//$hasReadRestrictions = array_key_exists('read', $tableStatus['Comment']['metacrud']['restrictions']??[]);
-$restrictions = $tableStatus['Comment']['metacrud']['restrictions']['read']??[];
 
-/*
-{ "statement":"SUM(totalsalesprice.Total)", "alias":"TotalSalesPriceSum", "isAggregate":true }
-
-joints:
-LEFT JOIN ewave_cca.totalsalesprice ON totalsalesprice.Pelicula = shows.ShortName
-*/
-/*
-$view = [
-  "expressions"=>[
-    [
-      "statement"=> "CONCAT('[',GROUP_CONCAT(DISTINCT CONCAT('\"', shows.ShortName, '\"') SEPARATOR ', '),']')",
-      "alias"=> "Shows_JSON",
-      "isAggregate"=> true
-    ]
-      
-  ],
-  "joints"=>[
-    "LEFT JOIN peliculas_shows ON adm_facturas_distribuidoras.pelicula_id = peliculas_shows.pelicula_id",
-    "LEFT JOIN ewave_cca.shows ON peliculas_shows.ewave_shows_ShowId = shows.ShowId"
-  ]
-];
-*/
-// 	{ "metacrud":{ "label":"ID Categoría", "regex_pattern":"^[0-9]+$", "foreign_key":"cm_categorias.categoria_id", "foreign_value":"cm_categorias.categoria" } }
-
+// GET COLUMNS
 $columns = getColumns($pdo, $tablename);
+
+// GET PRIMARY KEY NAME
 $primaryKeyName = getPrimaryKeyName($columns);
 
+// GET FOREIGN PAIRS FUNCTION
 function getForeignPairs($columns){
   $pairs = [];
   foreach($columns as $column){
@@ -64,6 +57,7 @@ function getForeignPairs($columns){
   return $pairs;
 }
 
+// GET FILTERS FUNCTION
 function getFilters($columns){
   $filters = [];
   foreach($columns as $column){
@@ -77,199 +71,224 @@ function getFilters($columns){
   return $filters;
 }
 
+// GET FILTERS
 $filters = getFilters($columns);
 
-
+// GET FOREIGN PAIRS
 $foreignPairs = getForeignPairs($columns);
 
+// START BUILDING SQL QUERY
 $sql = "SELECT ";
+$groupBy = "";
 
+// CHECK IF ANY OF THE EXPRESSIONS IN VIEW HAS AN AGGREGATE FUNCTION
+$hasAggregate = false;
+foreach($view['columns']??[] as $expression){
+  if($expression['isAggregate']){
+    $hasAggregate = true;
+    break;
+  }
+}
+
+if($hasAggregate){
+  $groupBy = " GROUP BY ";
+}
+
+// SELECT DISTINCT
 if(($view['distinct']??false) || $queryDistinct ){
   $sql.= "DISTINCT ";
 }
 
+// SELECT REGULAR COLUMNS IF REQUESTED
 if(($view['selectRegularColumns']??true)){
+  // SIMPLE COLUMNS
   foreach($columns as $column){
+    if($sortRequested && !$sortValidated){
+      if($column['Field'] == $sortField){
+        $sortValidated = true;
+      }
+    }
+    // IF SPECIFIC COLUMNS ARE REQUESTED, ONLY SELECT THOSE
     if($cols){
       if(!in_array($column['Field'], $cols)) continue;
     } 
     $sql.= $tablename.".".$column['Field'] . ", ";
+    if($hasAggregate){
+      $groupBy.= $tablename.".".$column['Field'] . ", ";
+    }
   }
 
+  // FOREIGN PAIRS
   foreach($foreignPairs as $field => $pair){
+    if($sortRequested && !$sortValidated){
+      if(str_replace('.', '_', $pair['value']) == $sortField){
+        $sortValidated = true;
+      }
+    }
     $sql.= $pair['value']." AS ". str_replace('.', '_', $pair['value']) . ", ";
+    if($hasAggregate){
+      $groupBy.= $pair['value'] . ", ";
+    }
+  }
+
+}
+
+// SELECT VIEW COLUMNS IF VIEW IS DEFINED
+foreach($view['columns']??[] as $expression){
+  if($sortRequested && !$sortValidated){
+    if($expression['a'] == $sortField){
+      $sortValidated = true;
+    }
+  }
+  $sql.= $expression['s'] . " AS " . $expression['a'] . ", ";
+  if($hasAggregate && !$expression['isAggregate']){
+    $groupBy.= $expression['s'] . ", ";
   }
 }
 
-foreach($view['columns']??[] as $expression){
-  $sql.= $expression['s'] . " AS " . $expression['a'] . ", ";
+// SORT FIELD SHOULD BE VALIDATED BY NOW
+if($sortRequested && !$sortValidated){
+  echo json_encode(["success"=>false,"error"=>"Invalid sort field"]);
+  exit();
 }
 
 $sql = rtrim($sql, ', ');
+$groupBy = rtrim($groupBy, ', ');
 
-$sql.= " FROM $tablename "; 
+$sql .= PHP_EOL;
+$sql.= " FROM $tablename " . PHP_EOL;
 
+// JOIN FOREIGN TABLES
 foreach($foreignPairs as $field => $pair){
   $parts = array_reverse(explode('.', $pair['key']));
   $col = $parts[0];
   $tab = $parts[1];
   $db = $parts[2]??null;
-  $sql.= " LEFT JOIN ". ($db ? "$db." : "") . "$tab ON $tablename.$field = $tab.$col";
+  $sql.= " LEFT JOIN ". ($db ? "$db." : "") . "$tab ON $tablename.$field = $tab.$col" . PHP_EOL;
 }
 
+// JOIN JOINTS
 foreach($view['joints']??[] as $joint){
-  $sql.= " $joint ";
+  $sql.= " $joint " . PHP_EOL;
 }
 
+$sql.= " WHERE 1=1 AND " . PHP_EOL;
+
+// GET VARIABLE VALUE
+function getVarValue($var) {
+  $parts = explode('.', $var);
+  $first = array_shift($parts);
+
+  // Determinar la variable base
+  switch ($first) {
+      case '_SESSION':
+          $value = $_SESSION;
+          break;
+      default:
+          return null; // No es una variable válida
+  }
+
+  // Recorrer los niveles de la variable
+  foreach ($parts as $part) {
+      if (!isset($value[$part])) {
+          return null; // Retorna null si la clave no existe
+      }
+      $value = $value[$part];
+  }
+
+  // Si es un array, formatearlo como una cadena para SQL
+  return is_array($value) ? ("('" . implode("','", $value) . "')") : $value;
+}
+
+
+// BUILD RESTRICTION FUNCTION
+function buildRestriction($restriction, $conn){
+  if(is_string($restriction['operands'][0])){
+    return  " (" . $restriction['operands'][0] . " " . $restriction['operator'] . " " . (
+      (isset($restriction['operands'][1]['var']) ?
+        getVarValue($restriction['operands'][1]['var']) :
+        (is_array($restriction['operands'][1]) ?
+          "('".implode("','", $restriction['operands'][1])."')" :
+          ("'".$conn->real_escape_string($restriction['operands'][1])."'")
+        )
+      )
+    ) . ") ";
+ } else {
+    return implode($restriction['operator'], array_map(function($operand) use ($conn) { return " (".buildRestriction($operand, $conn).") "; }, $restriction['operands']));
+  }
+}
+// RESTRICTIONS
+$restrictions = $tableStatus['Comment']['metacrud']['restrictions']['read']??[];
+
+
+if(count($restrictions) > 0){
+  $sql.= buildRestriction($restrictions, $conn) . " AND " . PHP_EOL;
+}
+
+// VIEW RESTRICTIONS
+$viewRestrictions = $view['restrictions']['read']??[];
+if(count($viewRestrictions) > 0){
+  $sql.= buildRestriction($viewRestrictions, $conn) . " AND " . PHP_EOL;
+}
+
+// IF SPECIFIC ID IS REQUESTED
 if($requested_id){
-  
-  $sql.= " WHERE $tablename.$primaryKeyName = :id";
-  $stmt = $pdo->prepare($sql);
-  $stmt->bindValue(':id', $requested_id);
-
-} else {
-//if(true) {
-
-  if($search){
-    // if WHERE has not been added, add it
-    if(strpos($sql, ' WHERE ') === false){
-      $sql.= " WHERE ";
-    } else {
-      $sql.= " AND ";
-    }
-    foreach($columns as $column){
-      $sql.= $tablename.".".$column['Field'] . " LIKE :search OR ";
-    }
-    foreach($foreignPairs as $field => $pair){
-      $sql.= $pair['value']." LIKE :search OR ";
-    }
-    // look also in view columns
-    foreach($view['columns']??[] as $expression){
-      $sql.= $expression['s'] . " LIKE :search OR ";
-    }
-    $sql = rtrim($sql, ' OR ');
-  }
-
-  if(count($filters)){
-    // if WHERE has not been added, add it
-    if(strpos($sql, ' WHERE ') === false){
-      $sql.= " WHERE ";
-    } else {
-      $sql.= " AND ";
-    }
-    foreach($filters as $field => $values){
-      $sql.= $tablename.".".$field . " IN (";
-      foreach($values as $value){
-        $sql.= ":$field$value, ";
-      }
-      $sql = rtrim($sql, ', ');
-      $sql.= ") AND ";
-    }
-    $sql = rtrim($sql, ' AND ');
-  }
-
-  if(count($view['conditions']??[])){
-    // if WHERE has not been added, add it
-    if(strpos($sql, ' WHERE ') === false){
-      $sql.= " WHERE ";
-    } else {
-      $sql.= " AND ";
-    }
-    foreach($view['conditions'] as $condition){
-      $sql.= $condition . " AND ";
-    }
-    $sql = rtrim($sql, ' AND ');
-  }
-
-  if(count($restrictions)){
-    foreach($restrictions as $field => $value){
-      if(is_string($value)){
-        // if WHERE has not been added, add it
-        if(strpos($sql, ' WHERE ') === false){ $sql.= " WHERE "; } else { $sql.= " AND "; }
-
-        $sql.= $tablename.".".$field . " = :$field AND ";
-      } else {
-        if(count($value)) {
-          // if WHERE has not been added, add it
-          if(strpos($sql, ' WHERE ') === false){ $sql.= " WHERE "; } else { $sql.= " AND "; }
-
-          if(strpos($field, '.') === false){
-            $sql.= $tablename.".".$field;
-          } else {
-            $sql.= $field;
-          }
-          $sql .= " IN (";
-          foreach($value as $v){
-            $fieldv = str_replace('.', '_', $field).$v;
-            $sql.= ":$fieldv, ";
-            //$sql.= ":$field$v, ";
-          }
-          $sql = rtrim($sql, ', ');
-          $sql.= ") AND ";
-        }
-      }
-    }
-    $sql = rtrim($sql, ' AND ');
-  }
-
-  // check if any of the expressions in view has an aggregate function
-  $hasAggregate = false;
-  foreach($view['columns']??[] as $expression){
-    if($expression['isAggregate']){
-      $hasAggregate = true;
-      break;
-    }
-  }
-
-  if($hasAggregate){
-    $sql.= " GROUP BY ";
-    if(($view['selectRegularColumns']??true)){
-      foreach($columns as $column){
-        $sql.= $tablename.".".$column['Field'] . ", ";
-      }
-      foreach($foreignPairs as $field => $pair){
-        $sql.= $pair['value'] . ", ";
-      }
-    }
-    foreach($view['columns']??[] as $expression){
-      if(!$expression['isAggregate']){
-        $sql.= $expression['s'] . ", ";
-      }
-    }
-        
-    $sql = rtrim($sql, ', ');
-  }
-
-  $sql.= " ORDER BY $sortField $sortOrder LIMIT :limit, :offset";
-  $stmt = $pdo->prepare($sql);
-  $stmt->bindValue(':limit', ($page - 1) * $limit, PDO::PARAM_INT);
-  $stmt->bindValue(':offset', $limit, PDO::PARAM_INT);
-  if($search) {
-    $stmt->bindValue(':search', "%$search%");
-  }
-  foreach($filters as $field => $values){
-    foreach($values as $value){
-      $stmt->bindValue(":$field$value", $value);
-    }
-  }
-
-  foreach($restrictions as $field => $value){
-    if(is_string($value)){
-      $stmt->bindValue(":$field", $value);
-    } else {
-      foreach($value as $v){
-        $fieldv = str_replace('.', '_', $field).$v;
-        $stmt->bindValue(":$fieldv", $v);
-      }
-    }
-  }
+  $requested_id = $conn->real_escape_string($requested_id);
+  $sql.= " $tablename.$primaryKeyName = '" . $requested_id . "' AND " . PHP_EOL;
 }
 
-//echo json_encode(["data"=>["query"=>$sql, "view"=>$metacrudView]]); die();
+// IF SEARCH IS REQUESTED
+if($search){
+  $search = preg_replace('!\s+!', ' ', $search);
+  $terms = explode(' ', $search);
+  $sql.= " (";
+  foreach($terms as $term){
+    $sql.= " CONCAT(";
+    foreach($columns??[] as $column){
+      $sql.= $tablename.".".$column['Field'] . ", ' ', ";
+    }
+    foreach($foreignPairs??[] as $field => $pair){
+      $sql.= $pair['value'] . ", ' ', ";
+    }
+    foreach($view['columns']??[] as $expression){
+      $sql.= $expression['s'] . ", ' ', ";
+    }
+    $sql = rtrim($sql, ", ' ', ");
+    $sql.= ") LIKE '%". $conn->real_escape_string($term) . "%' AND ";
+  }
+  $sql = rtrim($sql, " AND " . PHP_EOL);
+  $sql.= ") AND " . PHP_EOL;
+}
 
-$stmt->execute();
+// IF FILTERS ARE REQUESTED
+foreach($filters??[] as $field => $values){
+  $sql.= " $tablename.$field IN (";
+  foreach($values as $value){
+    $sql.= "'" . $conn->real_escape_string($value) . "', ";
+  }
+  $sql = rtrim($sql, ', ');
+  $sql.= ") AND " . PHP_EOL;
+}
 
-$records = $stmt->fetchAll(PDO::FETCH_ASSOC);
+// IF VIEW CONDITIONS ARE REQUESTED
+foreach($view['conditions']??[] as $condition){
+  $sql.= " $condition AND " . PHP_EOL;
+}
+
+$sql = rtrim($sql, " AND " . PHP_EOL);
+
+// GROUP BY
+$sql.= $groupBy . PHP_EOL;
+
+// ORDER BY
+$sql.= " ORDER BY $sortField $sortOrder " . PHP_EOL;
+
+// LIMIT
+$sql.= " LIMIT " . ($page - 1) * $limit . ", $limit";
+
+
+$result = $conn->query($sql);
+$records = $result->fetch_all(MYSQLI_ASSOC);
 
 $columnsAndViewColumns = array_merge(
   $columns, 
@@ -281,13 +300,8 @@ $columnsAndViewColumns = array_merge(
 
 // decode all columns ending with _JSON
 $records = array_map(function($record) use ($columnsAndViewColumns){
-  // foreach($record as $key => $value){
-  //   if(strpos($key, '_JSON') !== false){
-  //     $record[$key] = json_decode($value, true);
-  //   }
-  // }
   foreach($columnsAndViewColumns as $column){
-    if( (strpos($column['Field'], '_JSON') !== false) || $column['Type'] == 'json'){
+    if( (strpos($column['Field'], '_JSON') !== false) || (strpos($column['Field'], '_JSON') !== false) || $column['Type'] == 'json'){
       if(isset($record[$column['Field']])) {
         $record[$column['Field']] = json_decode($record[$column['Field']], true);
       }
