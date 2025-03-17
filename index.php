@@ -29,6 +29,8 @@ if ($method == 'get' && $resource == 'meta') {
   // Cache table structure for x hours
   $cacheTTL = 3600; //  * 24 * 7; // 1 week
   header("Cache-Control: public, max-age=$cacheTTL, must-revalidate");
+  header("Expires: " . gmdate("D, d M Y H:i:s", time() + $cacheTTL) . " GMT");
+  header("Pragma: cache");
 } else {
   // No caching for data
   header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
