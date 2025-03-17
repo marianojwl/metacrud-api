@@ -24,6 +24,19 @@ if($tablename && !in_array($tablename, explode(',', $_ENV['METACRUD_ALLOWED_TABL
   exit;
 }
 
+// DIFFERENT HEADERS FOR DIFFERENT REQUESTS
+if ($method == 'get' && $resource == 'meta') {
+  // Cache table structure for x hours
+  $cacheTTL = 3600; //  * 24 * 7; // 1 week
+  header("Cache-Control: public, max-age=$cacheTTL, must-revalidate");
+} else {
+  // No caching for data
+  header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+  header("Cache-Control: post-check=0, pre-check=0", false);
+  header("Pragma: no-cache");
+  header("Expires: Sat, 26 Jul 1997 05:00:00 GMT");
+}
+
 // Include PDO
 // include_once(__DIR__ . '/config/pdo.php');
 
