@@ -240,26 +240,44 @@ if($requested_id){
 // IF SEARCH IS REQUESTED
 if($search){
   $search = preg_replace('!\s+!', ' ', $search);
+  // get rid of any non-alphanumeric characters, but spaces
+  $search = preg_replace('/[^a-zA-Z0-9\s]/', '', $search);
+  
   $terms = explode(' ', $search);
   $sql.= " (";
+  // foreach($terms as $term){
+  //   $sql.= " CONCAT(";
+  //   foreach($columns??[] as $column){
+  //     $sql.= $tablename.".".$column['Field'] . ", ' ', ";
+  //   }
+  //   foreach($foreignPairs??[] as $field => $pair){
+  //     $sql.= $pair['value'] . ", ' ', ";
+  //   }
+  //   foreach($view['columns']??[] as $expression){
+  //     $sql.= $expression['s'] . ", ' ', ";
+  //   }
+  //   $sql = rtrim($sql, ", ' ', ");
+  //   $sql.= ") LIKE '%". $conn->real_escape_string($term) . "%' AND ";
+  // }
+  // $sql = rtrim($sql, " AND " . PHP_EOL);
   foreach($terms as $term){
-    $sql.= " CONCAT(";
+    $sql .= " ( ";
     foreach($columns??[] as $column){
-      $sql.= $tablename.".".$column['Field'] . ", ' ', ";
+      $sql.= $tablename.".".$column['Field'] . " LIKE '%". $conn->real_escape_string($term) . "%' OR ";
     }
     foreach($foreignPairs??[] as $field => $pair){
-      $sql.= $pair['value'] . ", ' ', ";
+      $sql.= $pair['value'] . " LIKE '%". $conn->real_escape_string($term) . "%' OR ";
     }
     foreach($view['columns']??[] as $expression){
-      $sql.= $expression['s'] . ", ' ', ";
+      $sql.= $expression['s'] . " LIKE '%". $conn->real_escape_string($term) . "%' OR ";
     }
-    $sql = rtrim($sql, ", ' ', ");
-    $sql.= ") LIKE '%". $conn->real_escape_string($term) . "%' AND ";
+    $sql = rtrim($sql, " OR ");
+    $sql.= ") AND " . PHP_EOL;
   }
   $sql = rtrim($sql, " AND " . PHP_EOL);
   $sql.= ") AND " . PHP_EOL;
 }
-
+//die($sql);
 // IF FILTERS ARE REQUESTED
 foreach($filters??[] as $field => $values){
   $sql.= " $tablename.$field IN (";
@@ -285,7 +303,6 @@ $sql.= " ORDER BY $sortField $sortOrder " . PHP_EOL;
 
 // LIMIT
 $sql.= " LIMIT " . ($page - 1) * $limit . ", $limit";
-
 
 $result = $conn->query($sql);
 $records = $result->fetch_all(MYSQLI_ASSOC);
