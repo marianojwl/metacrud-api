@@ -25,7 +25,7 @@ if($tablename && !in_array($tablename, explode(',', $_ENV['METACRUD_ALLOWED_TABL
 }
 
 // DIFFERENT HEADERS FOR DIFFERENT REQUESTS
-if ($method == 'get' && $resource == 'meta') {
+if ($method == 'get' && $resource == 'meta' && false) {
   // Cache table structure for x hours
   $cacheTTL = 3600; //  * 24 * 7; // 1 week
   header("Cache-Control: public, max-age=$cacheTTL, must-revalidate");
