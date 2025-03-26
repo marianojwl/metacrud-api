@@ -1,4 +1,5 @@
 <?php
+$startMicrotime = microtime(true);
 // GET PARAMETERS
 $page = $_GET['page'] ?? 1;
 $limit = $_GET['limit'] ?? 10;
@@ -78,7 +79,20 @@ $filters = getFilters($columns);
 $foreignPairs = getForeignPairs($columns);
 
 // START BUILDING SQL QUERY
-$sql = "SELECT ";
+$sql = "";
+
+// CTES
+if(($view['ctes']??false) && count($view['ctes']) > 0){
+  $sql.= " WITH " . PHP_EOL;
+  foreach($view['ctes'] as $cte){
+    $sql.= $cte . ', ' . PHP_EOL;
+  }
+  $sql = rtrim($sql, ', ' . PHP_EOL);
+  $sql.= " ";
+}
+
+// SELECT
+$sql .= "SELECT ";
 $groupBy = "";
 
 // CHECK IF ANY OF THE EXPRESSIONS IN VIEW HAS AN AGGREGATE FUNCTION
@@ -139,6 +153,10 @@ foreach($view['columns']??[] as $expression){
     if($expression['a'] == $sortField){
       $sortValidated = true;
     }
+  }
+  // check if s is reference to a variable
+  if(isset($expression['s']['var'])){
+    $expression['s'] = getVarValue($expression['s']['var']);
   }
   $sql.= $expression['s'] . " AS " . $expression['a'] . ", ";
   if($hasAggregate && !$expression['isAggregate']){
@@ -303,8 +321,11 @@ $sql.= " ORDER BY $sortField $sortOrder " . PHP_EOL;
 
 // LIMIT
 $sql.= " LIMIT " . ($page - 1) * $limit . ", $limit";
-
-$result = $conn->query($sql);
+try {
+  $result = $conn->query($sql);
+} catch (Exception $e) {
+  throw new Exception($e->getMessage() . " - " . $sql);
+}
 $records = $result->fetch_all(MYSQLI_ASSOC);
 
 $columnsAndViewColumns = array_merge(
@@ -329,4 +350,8 @@ $records = array_map(function($record) use ($columnsAndViewColumns){
 
 $request_uri = $_SERVER['REQUEST_URI'];
 
-echo json_encode(["data"=>["query"=>$sql, "view"=>$metacrudView, "rows"=>$records, "request_uri"=>$request_uri]]);
+$endMicrotime = microtime(true);
+
+$executionTime = $endMicrotime - $startMicrotime;
+$sql = "";
+echo json_encode(["data"=>["executionTime"=>$executionTime, "query"=>$sql, "view"=>$metacrudView, "rows"=>$records, "request_uri"=>$request_uri]]);
