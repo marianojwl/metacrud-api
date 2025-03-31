@@ -83,6 +83,9 @@ switch($resource){
     break;
 case 'crud':
 case 'upload':
+case 'import':
+case 'chart':
+
   //{"metacrud":{"userPermissionsVars":["$_SESSION.Cinemacenter-INTRANET.metacrud.perfiles_id"], "permissions": { "create": [7], "update":[7], "delete":[7], "read":[7] }}}
     $table_status = getTableStatus($pdo, $tablename);
     $table_meta = $table_status['Comment']['metacrud'] ?? [];
