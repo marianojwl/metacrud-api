@@ -46,31 +46,7 @@ $columns = getColumns($pdo, $tablename);
 // GET PRIMARY KEY NAME
 $primaryKeyName = getPrimaryKeyName($columns);
 
-// GET FOREIGN PAIRS FUNCTION
-function getForeignPairs($columns){
-  $pairs = [];
-  foreach($columns as $column){
-    $metacrud = $column['Comment']['metacrud'] ?? [];
-    if(isset($metacrud['foreign_key']) && isset($metacrud['foreign_value'])){
-      $pairs[$column['Field']] = ['key'=>$metacrud['foreign_key'], 'value'=>$metacrud['foreign_value']];
-    }
-  }
-  return $pairs;
-}
 
-// GET FILTERS FUNCTION
-function getFilters($columns){
-  $filters = [];
-  foreach($columns as $column){
-   if(isset($_GET[$column['Field']])) {
-    // if is array
-    if(is_array($_GET[$column['Field']])) {
-      $filters[$column['Field']] = $_GET[$column['Field']];
-    }
-   }
-  }
-  return $filters;
-}
 
 // GET FILTERS
 $filters = getFilters($columns);

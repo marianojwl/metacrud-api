@@ -12,6 +12,16 @@ if($name == null) {
     exit;
 }
 
+// GET COLUMNS
+$columns = getColumns($pdo, $tablename);
+
+// GET PRIMARY KEY NAME
+//$primaryKeyName = getPrimaryKeyName($columns);
+
+// GET FILTERS
+$filters = getFilters($columns);
+
+
 $tableStatus = null;
 
 $view = null;
@@ -48,7 +58,6 @@ switch($chart['type']) {
 $endMicrotime = microtime(true);
 
 $executionTime = $endMicrotime - $startMicrotime;
-$sql = "";
 $response['success'] = true;
 $response['data']['executionTime']= $executionTime;
 echo json_encode($response);

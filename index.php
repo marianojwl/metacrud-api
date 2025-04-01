@@ -114,7 +114,7 @@ case 'chart':
     if(file_exists(__DIR__ . "/".$resource."/$method.php")){
         try {
             include_once(__DIR__ . "/".$resource."/$method.php");
-        } catch (Exception $e) {
+        } catch (Throwable  $e) {
             $errorMsg = $e->getMessage();
             if(strpos($errorMsg, 'SQLSTATE[23000]') !== false){
                 $entryValue = @explode("Duplicate entry '", $errorMsg)[1];
@@ -123,7 +123,7 @@ case 'chart':
                 http_response_code(400);
                 exit;
             }
-            echo json_encode(['success'=>false, 'error' => $e->getMessage()]);
+            echo json_encode(['success'=>false, 'message'=>'Algo salió mal.', 'error' => $e->getMessage()]);
             http_response_code(400);
         }
         exit;

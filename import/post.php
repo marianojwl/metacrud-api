@@ -70,8 +70,13 @@ foreach($filesToUpload as $file){
 
 $data = [];
 foreach($filesToUpload as $file){
-  $xr = new \marianojwl\XLSReader\XLSReader($file['tmp_name'], $template);
-  $data = array_merge($data, $xr->getData());
+  try {
+    $xr = new \marianojwl\XLSReader\XLSReader($file['tmp_name'], $template);
+    $data = array_merge($data, $xr->getData());
+  } catch (Throwable $e) {
+    throw new Exception($e->getMessage());
+    exit;
+  }
 }
 
 // $tablename my contain dbname.tablename

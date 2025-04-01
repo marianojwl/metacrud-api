@@ -12,10 +12,21 @@ namespace marianojwl\XLSReader {
     public function index() { return $this->index; }
     public function rows() { return $this->rows; }
 
-    private function getParsedValue($value, $type="string", $regexMatch=null, $givenFormat=null, $outputFormat=null) {
+    private function getParsedValue($value, $type="string", $regexMatch=null, $givenFormat=null, $outputFormat=null, $allMatchesMustBeEqual=false) {
       $rawValue = $value;
       if ($regexMatch) {
         preg_match('/'.$regexMatch.'/', $value, $matches);
+        if (empty($matches)) {
+          throw new \Exception("\"$rawValue\" no pudo ser validado con $regexMatch");
+        }
+        if($allMatchesMustBeEqual) {
+          for($m = 2; $m < count($matches); $m++){
+            if($matches[$m] != $matches[1]){
+              throw new \Exception($matches[$m] . " no es igual a " . $matches[1]);
+            }
+          }
+
+        }
         $rawValue = $matches[1] ?? null;
       }
       switch ($type) {
@@ -23,7 +34,11 @@ namespace marianojwl\XLSReader {
           $rawValue = floatval($rawValue);
           break;
         case 'date':
-          $rawValue = \DateTime::createFromFormat($givenFormat, $rawValue)->format($outputFormat);
+          try {
+            $rawValue = \DateTime::createFromFormat($givenFormat, $rawValue)->format($outputFormat);
+          } catch (\Throwable  $e) {
+            throw new \Exception("Error parsing date: " . $e->getMessage());
+          }
           break;
         default:
           break;
@@ -39,7 +54,8 @@ namespace marianojwl\XLSReader {
         $meta['type'],
         $meta['regexMatch'] ?? null,
         $meta['givenFormat'] ?? null,
-        $meta['outputFormat'] ?? null
+        $meta['outputFormat'] ?? null,
+        $meta['allMatchesMustBeEqual'] ?? false
       );
       return $md;
     }
@@ -98,7 +114,8 @@ namespace marianojwl\XLSReader {
           $key['type'] ?? 'string',
           $key['regexMatch'] ?? null,
           $key['givenFormat'] ?? null,
-          $key['outputFormat'] ?? null
+          $key['outputFormat'] ?? null,
+          $key['allMatchesMustBeEqual'] ?? false
         );
       }
       return $newRow;
@@ -153,7 +170,8 @@ namespace marianojwl\XLSReader {
                 $key['type'] ?? 'string',
                 $key['regexMatch'] ?? null,
                 $key['givenFormat'] ?? null,
-                $key['outputFormat'] ?? null
+                $key['outputFormat'] ?? null,
+                $key['allMatchesMustBeEqual'] ?? false
               );
             }
           }

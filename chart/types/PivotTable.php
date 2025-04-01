@@ -7,29 +7,86 @@ if($settings == null) {
 }
 
 $columnsField = $settings['columnsField'] ?? null;
-$rowsField = $settings['rowsField'] ?? null;
+$rowsFields = $settings['rowsFields'] ?? null;
 $valuesField = $settings['valuesField'] ?? null;
 
-$qCol = "SELECT DISTINCT $columnsField FROM $tablename ORDER BY $columnsField";
+$qCol = "SELECT DISTINCT ".$columnsField["s"]." FROM $tablename WHERE 1=1 AND ";
+// IF FILTERS ARE REQUESTED
+foreach($filters??[] as $field => $values){
+  if(!is_array($values)) {
+    $values = [$values];
+  }
+  $qCol.= " $tablename.$field IN (";
+  foreach($values as $value){
+    $qCol.= "'" . $conn->real_escape_string($value) . "', ";
+  }
+  $qCol = rtrim($qCol, ', ');
+  $qCol.= ") AND " . PHP_EOL;
+}
+$qCol = rtrim($qCol, " AND " . PHP_EOL);
+$qCol .=" ORDER BY ".$columnsField["s"];
 
 try {
   $rCol= $conn->query($qCol);
 } catch (Exception $e) {
-  throw new Exception($e->getMessage() . " - " . $sql);
+  throw new Exception($e->getMessage() . " - " . $qCol);
 }
 // fethc all values
 $cols = $rCol->fetch_all(MYSQLI_ASSOC);
+
+if(count($cols) == 0) {
+    $response['success'] = true;
+    $response['data']['rows'] = []; 
+    echo json_encode($response);
+    exit;
+}
 // get all values from $columnsField
 $cols = array_map(function($col) use ($columnsField) {
-  return $col[$columnsField];
+  return $col[$columnsField["s"]];
 }, $cols);
 
 
 // Generate dynamic SQL columns
-$colstatements = array_map(fn($col) => "SUM(CASE WHEN descripcion = '" . addslashes($col) . "' THEN ventas_unidades ELSE 0 END) AS `" . addslashes($col) . "`", $cols);
-$sql = "SELECT $tablename.$rowsField, " . implode(", ", $colstatements) . " 
-FROM $tablename 
-GROUP BY $tablename.$rowsField ORDER BY $tablename.$rowsField";
+$colstatements = array_map(fn($col) => "SUM(CASE WHEN ".$columnsField["s"]." = '" . addslashes($col) . "' THEN ".$valuesField['s']." ELSE 0 END) AS `" . addslashes($col) . "`", $cols);
+$rowStatements = array_map(fn($rowField) => $rowField['s'], $rowsFields);
+$sql = "SELECT ".implode(", ", $rowStatements).", " . implode(", ", $colstatements) . " 
+FROM $tablename WHERE 1=1 AND ";
+
+// IF FILTERS ARE REQUESTED
+foreach($filters??[] as $field => $values){
+  if(!is_array($values)) {
+    $values = [$values];
+  }
+  $sql.= " $tablename.$field IN (";
+  foreach($values as $value){
+    $sql.= "'" . $conn->real_escape_string($value) . "', ";
+  }
+  $sql = rtrim($sql, ', ');
+  $sql.= ") AND " . PHP_EOL;
+}
+$sql = rtrim($sql, " AND " . PHP_EOL);
+
+// Filter rows with 'sortOrder'
+$filteredRows = array_filter($rowsFields, function($rowField) {
+  return isset($rowField['sortOrder']);
+});
+
+// Sort by 'sortOrder'
+usort($filteredRows, function($a, $b) {
+  return $a['sortOrder'] <=> $b['sortOrder'];
+});
+
+// Extract column names (change 'columnName' to the actual key)
+$sortedColumnNames = array_map(function($rowField) {
+  return $rowField['s']; // Change to actual key in your array
+}, $filteredRows);
+
+$sql .= " GROUP BY " . implode(", ", $rowStatements) . 
+      (count($sortedColumnNames) ? " ORDER BY " . implode(", ", $sortedColumnNames) . " ASC" : "");
+
+
+
+//echo $sql;
 
 $r = $conn->query($sql);
 if ($r === false) {
@@ -39,4 +96,4 @@ if ($r === false) {
 $records = $r->fetch_all(MYSQLI_ASSOC);
 $response['data']['headers'] = $cols;
 $response['data']['rows'] = $records; 
-
+$response['data']['sql'] = $sql; 
