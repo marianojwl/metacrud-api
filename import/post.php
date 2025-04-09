@@ -71,12 +71,18 @@ foreach($filesToUpload as $file){
 $data = [];
 foreach($filesToUpload as $file){
   try {
-    $xr = new \marianojwl\XLSReader\XLSReader($file['tmp_name'], $template);
+    $xr = new \marianojwl\XLSReader\XLSReader($file['tmp_name'], $template, $file['name']);
     $data = array_merge($data, $xr->getData());
   } catch (Throwable $e) {
     throw new Exception($e->getMessage());
     exit;
   }
+}
+
+// DEBUG
+if(false) {
+print_r($data);
+die();
 }
 
 // $tablename my contain dbname.tablename
@@ -144,6 +150,24 @@ try {
 
 
 $conn->close();
+
+foreach($filesToUpload as $file){
+  try {
+    // if $table_meta['import']['saveFile'] is true, save the file to __DIR__/../imports/tablename/year/month/day/time()
+    if(@$table_meta['import']['saveFile']){
+      $path = __DIR__ . '/../imports/' . str_replace('.', '_', $tablename) . '/' . date('Y/m/d/');
+      if(!is_dir($path)){
+        mkdir($path, 0777, true);
+      }
+      $filename = $path . time() . '_' . basename($file['name']);
+      move_uploaded_file($file['tmp_name'], $filename);
+    }
+
+  } catch (Throwable $e) {
+    throw new Exception("Importación exitosa, pero no se pudo guardar una copia del archivo. " . $e->getMessage());
+    exit;
+  }
+}
 
 
 echo json_encode(['success'=>true, 'message' => 'Importación exitosa']);

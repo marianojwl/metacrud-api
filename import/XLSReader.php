@@ -12,12 +12,12 @@ namespace marianojwl\XLSReader {
     public function index() { return $this->index; }
     public function rows() { return $this->rows; }
 
-    private function getParsedValue($value, $type="string", $regexMatch=null, $givenFormat=null, $outputFormat=null, $allMatchesMustBeEqual=false) {
+    private function getParsedValue($key, $value, $type="string", $regexMatch=null, $givenFormat=null, $outputFormat=null, $allMatchesMustBeEqual=false) {
       $rawValue = $value;
       if ($regexMatch) {
         preg_match('/'.$regexMatch.'/', $value, $matches);
         if (empty($matches)) {
-          throw new \Exception("\"$rawValue\" no pudo ser validado con $regexMatch");
+          throw new \Exception("$key: \"$rawValue\" no pudo ser validado con $regexMatch");
         }
         if($allMatchesMustBeEqual) {
           for($m = 2; $m < count($matches); $m++){
@@ -40,18 +40,83 @@ namespace marianojwl\XLSReader {
             throw new \Exception("Error parsing date: " . $e->getMessage());
           }
           break;
+        case 'serialDate':
+          try {
+            // Excel dates start from 1899-12-31
+            $unixTimestamp = ($rawValue - 25569) * 86400;
+
+            // Format as date
+            $rawValue = gmdate("Y-m-d", $unixTimestamp);
+            
+          } catch (\Throwable  $e) {
+            throw new \Exception("Error parsing date: " . $e->getMessage());
+          }
+          break;
         default:
           break;
       }
       return $rawValue;
     }
 
+    private function getMetaWithAnchorRefWithValue($meta){
+      /*
+        { 
+          "name":"deposito_total_voucher",
+          "anchorRef":{
+            "column":1, 
+            "regexMatch":"^Total\\sDinero\\sDepositado:$",
+            "occurrence":1
+          },
+          "xOffset":1,
+          "yOffset":0,
+          "type":"number", 
+          "regexMatch":"^([0-9]+(\\.[0-9]{1,2})?)$"
+        }  
+          */
+      $md = $meta;
+      $rows = $this->rows;
+      $rowCount = count($rows);
+      $anchorRefColumn = $meta['anchorRef']['column'] - 1;
+      $anchorRefRegexMatch = $meta['anchorRef']['regexMatch'];
+      $occurrence = $meta['anchorRef']['occurrence'] ?? 1;
+      $xOffset = $meta['xOffset'] ?? 0;
+      $yOffset = $meta['yOffset'] ?? 0;
+      $rowIndex = null;
+      for($i=0; $i < $rowCount; $i++){
+        if(isset($rows[$i][$anchorRefColumn]) && preg_match('/'.$anchorRefRegexMatch.'/', $rows[$i][$anchorRefColumn])){
+          $occurrence--;
+          if($occurrence == 0){
+            $rowIndex = $i;
+            break;
+          }
+        }
+      }
+      if($rowIndex === null){
+        throw new \Exception("No se encontró la referencia de anclaje para " . $meta['key']);
+      }
+      $rawValue = @$rows[$rowIndex+$yOffset][$anchorRefColumn+$xOffset] ?? null;
+      if($rawValue === null){
+        throw new \Exception("No se encontró el valor para " . $meta['key']);
+      }
+      $md['value'] = $this->getParsedValue( 
+        $meta['key'],
+        $rawValue,
+        @$meta['type'],
+        $meta['regexMatch'] ?? null,
+        $meta['givenFormat'] ?? null,
+        $meta['outputFormat'] ?? null,
+        $meta['allMatchesMustBeEqual'] ?? false
+      );
+      return $md;
+
+    }
     private function getMetaWithValue($meta){
       $md = $meta;
       $rows = $this->rows;
-      $md['value'] = $this->getParsedValue(
+      $md['value'] = $this->getParsedValue( 
+        $meta['key'],
         $rows[$meta['row']-1][$meta['column']-1],
-        $meta['type'],
+        @$meta['type'],
         $meta['regexMatch'] ?? null,
         $meta['givenFormat'] ?? null,
         $meta['outputFormat'] ?? null,
@@ -63,13 +128,18 @@ namespace marianojwl\XLSReader {
     private function getSheetLevelMetaDataStructureFromTemplate() {
       $template = $this->template;
       $metaData = array_filter($template['setMarkers']['metaData'], function($meta) {
-        return isset($meta['column']) && isset($meta['row']);
+        return (isset($meta['column']) && isset($meta['row'])) || isset($meta['anchorRef']);
       });
 
       $md = [];
 
       foreach($metaData as $meta) {
-        $md[$meta['key']] = $this->getMetaWithValue($meta);
+        
+        if(isset($meta['anchorRef'])) {
+          $md[$meta['key']] = $this->getMetaWithAnchorRefWithValue($meta);
+        } else {
+          $md[$meta['key']] = $this->getMetaWithValue($meta);
+        }
       }
       
       return $md;
@@ -100,6 +170,9 @@ namespace marianojwl\XLSReader {
     }
 
     private function isEndOfSet($row){
+      if($row==null) {
+        return true;
+      }
       $regexMatch = $this->template['setMarkers']['end']['regexMatch'];
       $column = $this->template['setMarkers']['end']['column'] - 1;
       return isset($row[$column]) && preg_match('/'.$regexMatch.'/', $row[$column]);
@@ -110,6 +183,7 @@ namespace marianojwl\XLSReader {
       $keys = $this->template['setMarkers']['values']['keys'];
       foreach($keys as $key) {
         $newRow[$key['name']] = $this->getParsedValue(
+          $key['name'],
           $row[$key['column']-1],
           $key['type'] ?? 'string',
           $key['regexMatch'] ?? null,
@@ -144,7 +218,8 @@ namespace marianojwl\XLSReader {
         $j++;
 
         // CHECK IF END OF SET
-        if($this->isEndOfSet($row)){
+        //if($this->isEndOfSet($row)){
+        if($this->isEndOfSet(@$this->rows[$i+$endOffset-1])){
           if($newSet) {
             $this->dataSets[] = $newSet;
           }
@@ -166,6 +241,7 @@ namespace marianojwl\XLSReader {
             } 
             if($key['setRow'] == $j+1){
               $newSetMetaData[$key['key']] = $this->getParsedValue(
+                $key['key'],
                 $row[$key['setColumn']-1],
                 $key['type'] ?? 'string',
                 $key['regexMatch'] ?? null,
@@ -210,10 +286,12 @@ namespace marianojwl\XLSReader {
     protected $parsedXls;
     protected $template;
     protected $sheets;
+    protected $realFileName;
 
-    public function __construct($xlsPath, $template) {
+    public function __construct($xlsPath, $template, $realFileName) {
       $this->xlsPath = $xlsPath;
       $this->template = $template;
+      $this->realFileName = $realFileName;
       $this->parsedXls = \Shuchkin\SimpleXLS::parse($xlsPath);
       $sheetNames = $this->parsedXls->sheetNames();
       foreach ($sheetNames as $index => $name) {
@@ -223,7 +301,11 @@ namespace marianojwl\XLSReader {
         if (empty($sheetTemplate)) {
           continue;
         }
-        $this->sheets[$index] = new Sheet($sheetTemplate[0], $index, $name, $this->parsedXls->rows($index));
+        try {
+          $this->sheets[$index] = new Sheet($sheetTemplate[0], $index, $name, $this->parsedXls->rows($index));
+        } catch (\Throwable $e) {
+          throw new \Exception("Error con el archivo «".$this->realFileName."»: " . $e->getMessage());
+        }
       }
     }
 
