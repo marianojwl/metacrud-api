@@ -329,5 +329,5 @@ $request_uri = $_SERVER['REQUEST_URI'];
 $endMicrotime = microtime(true);
 
 $executionTime = $endMicrotime - $startMicrotime;
-$sql = "";
+// $sql = "";
 echo json_encode(["data"=>["executionTime"=>$executionTime, "query"=>$sql, "view"=>$metacrudView, "rows"=>$records, "request_uri"=>$request_uri]]);
