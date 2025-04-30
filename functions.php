@@ -43,6 +43,39 @@ function getForeignPairs($columns){
   }
   return $pairs;
 }
+
+// GET FOREIGN PAIRS FUNCTION
+function getForeignPairsTest($columns){
+  $pairs = [];
+  $i=1;
+  foreach($columns as $column){
+    $metacrud = $column['Comment']['metacrud'] ?? [];
+    if(isset($metacrud['foreign_key']) && isset($metacrud['foreign_value'])){
+      $table_alias = 'ft'.$i;
+      $explodedKey = explode('.', $metacrud['foreign_key']);
+      //print_r($explodedKey);
+      $explodedValue = explode('.', $metacrud['foreign_value']);
+      $key_column = $explodedKey[count($explodedKey)-1];
+      $value_column = $explodedValue[count($explodedValue)-1];
+      $foreign_table = $explodedKey[0];
+      // if explodedKey has more than 2 parts, add the second part to the foreign table
+      if(isset($explodedKey[2])){
+        $foreign_table .= '.'.$explodedKey[1];
+      }
+      //print_r($foreign_table);
+      $pairs[$column['Field']] = [
+        'table_alias'=>$table_alias,
+        'key'=> $table_alias.'.'.$key_column,
+        'value'=> $table_alias.'.'.$value_column,
+        'foreign_table'=>$foreign_table
+      ];
+      $i++;
+    }
+  }
+  return $pairs;
+}
+
+
 function getTableStatus($pdo, $tablename){
   $parts = array_reverse(explode('.', $tablename));
   $tb = $parts[0];

@@ -43,6 +43,15 @@ if($metacrudView) {
 // GET COLUMNS
 $columns = getColumns($pdo, $tablename);
 
+// override column data present in the view { regularColumnsOverride: {columnName: ...
+// foreach($view['regularColumnsOverride']??[] as $columnName => $columnData){
+//   foreach($columns as $i => $column){
+//     if($column['Field'] == $columnName){
+//       $columns[$i]['Comment']['metacrud'] = array_merge($columns[$i]['Comment']['metacrud']??[], $columnData);
+//     }
+//   }
+// }
+
 // GET PRIMARY KEY NAME
 $primaryKeyName = getPrimaryKeyName($columns);
 
@@ -160,7 +169,16 @@ foreach($foreignPairs as $field => $pair){
   $db = $parts[2]??null;
   $sql.= " LEFT JOIN ". ($db ? "$db." : "") . "$tab ON $tablename.$field = $tab.$col" . PHP_EOL;
 }
+// foreach($foreignPairs as $field => $pair){
+//   $parts = array_reverse(explode('.', $pair['key']));
+//   $col = $parts[0];
+//   $tab = $parts[1];
 
+//   $table_alias = $pair['table_alias'];
+//   $foreign_table = $pair['foreign_table'];
+//   $sql.= " LEFT JOIN $foreign_table $table_alias ON $tablename.$field = $tab.$col" . PHP_EOL;
+ 
+// }
 // JOIN JOINTS
 foreach($view['joints']??[] as $joint){
   $sql.= " $joint " . PHP_EOL;
@@ -271,7 +289,6 @@ if($search){
   $sql = rtrim($sql, " AND " . PHP_EOL);
   $sql.= ") AND " . PHP_EOL;
 }
-//die($sql);
 // IF FILTERS ARE REQUESTED
 foreach($filters??[] as $field => $values){
   $sql.= " $tablename.$field IN (";
@@ -297,6 +314,7 @@ $sql.= " ORDER BY $sortField $sortOrder " . PHP_EOL;
 
 // LIMIT
 $sql.= " LIMIT " . ($page - 1) * $limit . ", $limit";
+// die($sql);
 try {
   $result = $conn->query($sql);
 } catch (Exception $e) {
