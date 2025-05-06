@@ -55,7 +55,12 @@ $maxSize = $column['Comment']['metacrud']['upload']['maxSize'] ?? 1000000; // ex
 
 $acceptedTypes = $column['Comment']['metacrud']['upload']['accept'] ?? ['image/jpeg', 'image/png', 'image/gif', 'application/pdf'];
 
-$uploadDir = $column['Comment']['metacrud']['upload']['dir'] ?? __DIR__ . '/../uploads/' . $tablename . '/' . $filesKey . '/';
+$uploadDir = $column['Comment']['metacrud']['upload']['dir'] ? (__DIR__ . '/../../' . $column['Comment']['metacrud']['upload']['dir']) : __DIR__ . '/../uploads/' . $tablename . '/' . $filesKey . '/';
+
+// year month day organization
+if($column['Comment']['metacrud']['upload']['yearMonthDateOrganization'] ?? false){
+  $uploadDir .= date('Y') . '/' . date('m') . '/' . date('d') . '/';
+}
 
 // ORGANIZE FILES
 $filesToUpload = [];

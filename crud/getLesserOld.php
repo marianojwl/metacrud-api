@@ -180,37 +180,9 @@ $groupBy = rtrim($groupBy, ', ');
 
 $sql .= PHP_EOL;
 $sql.= " FROM " . PHP_EOL;
-if($view['limitBeforeJoin']??true){
-  $sql.= " ( SELECT * FROM $tablename ";
-  $sql .= " WHERE 1=1 AND " . PHP_EOL;
-  // IF SPECIFIC ID IS REQUESTED
-  if($requested_id){
-    $requested_id = $conn->real_escape_string($requested_id);
-    $sql.= " $primaryKeyName = '" . $requested_id . "' AND " . PHP_EOL;
-  }
-
-  foreach($filters??[] as $field => $values){
-    $includeNull = false;
-    $sql.= " ( ";
-    $sql.= " $field IN (";
-    foreach($values as $value){
-      $sql.= "'" . $conn->real_escape_string($value) . "', ";
-      if($value == "") $includeNull = true;
-    }
-    $sql = rtrim($sql, ', ');
-    $sql.= ") " . PHP_EOL;
-    if($includeNull){
-      $sql.= " OR $field IS NULL " . PHP_EOL;
-    }
-    $sql.= ") " . PHP_EOL;
-    $sql.= " AND " . PHP_EOL;
-  }
-  
-  $sql = rtrim($sql, " AND " . PHP_EOL);
-
-  $sql.= " ORDER BY $sortField $sortOrder " . PHP_EOL;
-  $sql.= " LIMIT " . ($page - 1) * $limit . ", $limit " . PHP_EOL;
-  $sql.= " )" . PHP_EOL;
+if($view['limitBeforeJoin']??false){
+  $sql.= " ( SELECT * FROM $tablename";
+  $sql.= " LIMIT " . ($page - 1) * $limit . ", $limit )" . PHP_EOL;
 } else {
   $sql.= $tablename ;
 }
@@ -339,10 +311,10 @@ if(count($viewRestrictions) > 0){
 }
 
 // IF SPECIFIC ID IS REQUESTED
-// if($requested_id){
-//   $requested_id = $conn->real_escape_string($requested_id);
-//   $sql.= " $mainTableAlias.$primaryKeyName = '" . $requested_id . "' AND " . PHP_EOL;
-// }
+if($requested_id){
+  $requested_id = $conn->real_escape_string($requested_id);
+  $sql.= " $mainTableAlias.$primaryKeyName = '" . $requested_id . "' AND " . PHP_EOL;
+}
 
 // IF SEARCH IS REQUESTED
 if($search){
@@ -386,22 +358,22 @@ if($search){
   $sql.= ") AND " . PHP_EOL;
 }
 // IF FILTERS ARE REQUESTED
-// foreach($filters??[] as $field => $values){
-//   $includeNull = false;
-//   $sql.= " ( ";
-//   $sql.= " $mainTableAlias.$field IN (";
-//   foreach($values as $value){
-//     $sql.= "'" . $conn->real_escape_string($value) . "', ";
-//     if($value == "") $includeNull = true;
-//   }
-//   $sql = rtrim($sql, ', ');
-//   $sql.= ") " . PHP_EOL;
-//   if($includeNull){
-//     $sql.= " OR $mainTableAlias.$field IS NULL " . PHP_EOL;
-//   }
-//   $sql.= ") " . PHP_EOL;
-//   $sql.= " AND " . PHP_EOL;
-// }
+foreach($filters??[] as $field => $values){
+  $includeNull = false;
+  $sql.= " ( ";
+  $sql.= " $mainTableAlias.$field IN (";
+  foreach($values as $value){
+    $sql.= "'" . $conn->real_escape_string($value) . "', ";
+    if($value == "") $includeNull = true;
+  }
+  $sql = rtrim($sql, ', ');
+  $sql.= ") " . PHP_EOL;
+  if($includeNull){
+    $sql.= " OR $mainTableAlias.$field IS NULL " . PHP_EOL;
+  }
+  $sql.= ") " . PHP_EOL;
+  $sql.= " AND " . PHP_EOL;
+}
 
 // IF VIEW CONDITIONS ARE REQUESTED
 foreach($view['conditions']??[] as $condition){
@@ -418,14 +390,13 @@ $sql.= $groupBy . PHP_EOL;
 $sql.= " ORDER BY $sortField $sortOrder " . PHP_EOL;
 
 // LIMIT
-// if(!($view['limitBeforeJoin']??false)) {
-//   $sql.= " LIMIT " . ($page - 1) * $limit . ", $limit";
-// }
+if(!($view['limitBeforeJoin']??false)) {
+  $sql.= " LIMIT " . ($page - 1) * $limit . ", $limit";
+}
 // die($sql);
 try {
   $result = $conn->query($sql);
 } catch (Exception $e) {
-  $conn->close();
   throw new Exception($e->getMessage() . " - " . $sql);
 }
 $records = $result->fetch_all(MYSQLI_ASSOC);
@@ -450,8 +421,6 @@ $records = array_map(function($record) use ($columnsAndViewColumns){
   }
   return $record;
 }, $records);
-
-$conn->close();
 
 $request_uri = $_SERVER['REQUEST_URI'];
 

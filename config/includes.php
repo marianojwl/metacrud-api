@@ -17,3 +17,5 @@ if(file_exists(__DIR__ . '/../' . $_ENV['SESSION_FILE'])){
 
 
 include_once(__DIR__ . '/../functions.php');
+
+include_once(__DIR__ . '/../models/QueryMaker.php');
