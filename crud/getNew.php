@@ -1,6 +1,10 @@
 <?php
 $startMicrotime = microtime(true);
-// GET PARAMETERS
+
+
+/******************
+ * GET PARAMETERS *
+ ******************/
 $page = $_GET['page'] ?? 1;
 $limit = $_GET['limit'] ?? 10;
 $sortField = $_GET['sort'] ?? 1;
@@ -12,7 +16,11 @@ $search = $_GET['search'] ?? null;
 $metacrudView = $_GET['metacrudView'] ?? null;
 $queryDistinct = ($_GET['distinct']??"") == "true" ?? false;
 
-// VALIDATE PARAMETERS
+
+
+/***********************
+ * VALIDATE PARAMETERS *
+ ***********************/
 if(!is_numeric($page) || !is_numeric($limit)){
   echo json_encode(["success"=>false,"error"=>"Invalid page or limit"]);
   exit();
@@ -22,6 +30,102 @@ if(!in_array($sortOrder, ['asc', 'desc', 'ASC', 'DESC'])){
   echo json_encode(["success"=>false,"error"=>"Invalid sort order"]);
   exit();
 }
+
+
+
+/**************
+ * TABLE META *
+ **************/
+
+$tableStatus = null;
+
+$view = null;
+
+// GET TABLE STATUS
+$tableStatus = getTableStatus($pdo, $tablename); 
+
+// CHECK IF THE REQUESTED VIEW EXISTS
+if($metacrudView) {
+  $view = $tableStatus['Comment']['metacrud']['views'][$metacrudView]??null;
+  if(!$view) {
+    echo json_encode(["success"=>false,"error"=>"View not found"]);
+    exit();
+  }
+}
+
+
+
+/****************
+ * COLUMNS META *
+ ****************/
+
+// GET COLUMNS
+$columns = getColumns($pdo, $tablename);
+
+// override column data present in the view { regularColumnsOverride: {columnName: ...
+foreach($view['regularColumnsOverride']??[] as $columnName => $columnData){
+  foreach($columns as $i => $column){
+    if($column['Field'] == $columnName){
+      $columns[$i]['Comment']['metacrud'] = array_merge($columns[$i]['Comment']['metacrud']??[], $columnData);
+    }
+  }
+}
+
+// GET PRIMARY KEY NAME
+$primaryKeyName = getPrimaryKeyName($columns);
+
+
+
+/***************
+ * MYSQL QUERY *
+ ***************/
+// MAIN TABLE SUBQUERY
+$subquery  = "SELECT * FROM $tablename " . PHP_EOL;
+$subquery .= " ORDER BY $sortField $sortOrder " . PHP_EOL;
+$subquery .= " LIMIT " . ($page - 1) * $limit . ", $limit " . PHP_EOL;
+
+// GENERAL QUERY
+$sql  = "SELECT * FROM ( " . PHP_EOL;
+$sql .= $subquery;
+$sql .= " ) AS _ " . PHP_EOL;
+
+// ADD CTES
+
+// ADD COLUMNS TO SELECT
+
+// ADD JOINTS
+
+// ADD CONDITIONS
+
+$result = $conn->query($sql);
+if(!$result){
+  $conn->close();
+  throw new Exception($conn->error . " - " . $sql);
+}
+$records = $result->fetch_all(MYSQLI_ASSOC);
+
+$conn->close();
+
+/**********
+ * OUTPUT *
+ **********/
+$endMicrotime = microtime(true);
+
+$executionTime = $endMicrotime - $startMicrotime;
+
+echo json_encode([
+  "success"=>true,
+  "data"=>[
+    "executionTime"=>$executionTime, 
+    "query"=>$sql, 
+    "view"=>$metacrudView, 
+    "rows"=>$records, 
+    //"request_uri"=>$request_uri
+  ]
+]);
+
+
+/*
 
 $tableStatus = null;
 
@@ -459,8 +563,11 @@ $conn->close();
 
 $request_uri = $_SERVER['REQUEST_URI'];
 
+
 $endMicrotime = microtime(true);
 
 $executionTime = $endMicrotime - $startMicrotime;
 // $sql = "";
 echo json_encode(["data"=>["executionTime"=>$executionTime, "query"=>$sql, "view"=>$metacrudView, "rows"=>$records, "request_uri"=>$request_uri]]);
+
+*/

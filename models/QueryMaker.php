@@ -15,7 +15,7 @@ namespace marianojwl\metacrud {
     public function addCondition($condition) { $this->conditions[] = $condition; return $this; }
 
     private function getMainTableConditions() {
-
+      return [];
     }
 
     public function getSelectQuery() {
