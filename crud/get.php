@@ -117,15 +117,84 @@ $foreignValueJoints = array_map(function($column) use ($columns) {
 $gqJoins = [...$foreignValueJoints??[], ...$view['joints']??[]];
 
 
-/***************
- * MYSQL QUERY *
- ***************/
-// MAIN TABLE SUBQUERY
-$subquery  = "SELECT * FROM $tablename " . PHP_EOL;
+
+/********************************************************
+ *            MAIN TABLE SUBQUERY OWN FILTERS           *
+ *******************************************************/
+$mtFilters = array_map(function($column) {
+    $key = $column['Field']; // ?? $column['a'];
+    if(!$key) return null;
+    return [ $key => $_GET[$key] ];
+}, array_values(array_filter($columns, function($column) {
+    $key = $column['Field']; // ?? $column['a'];
+    if(!$key) return false;
+    return (is_array($_GET[$key]??null));
+  })));
+
+
+/*******************************************************
+ *            MAIN TABLE SUBQUERY VIEW FILTERS         *
+ *******************************************************/
+$viewFilters = array_map(function($column) {
+    $key = $column['a'];
+    if(!$key) return null;
+    return [ $key => $_GET[$key] ];
+}, array_values(array_filter($view['columns']??[], function($column) {
+    $key = $column['a'];
+    if(!$key) return false;
+    return (is_array($_GET[$key]??null));
+  })));
+
+
+/**********************************************
+ *            MAIN TABLE SUBQUERY             *
+ **********************************************/
+$subquery  = "SELECT $tablename.*, " . PHP_EOL;
+
+// VIEW COLUMN IN SUBQUERY
+$subquery .= implode(", ", array_map(function($column) {
+          return $column['s'] . " AS " . $column['a'];
+        }, array_filter($view['columns']??[], function($column) {
+          return $column['inSubquery']??false;
+        }))) . PHP_EOL;
+
+$subquery  = rtrim($subquery, ", " . PHP_EOL);
+
+$subquery .= " FROM $tablename " . PHP_EOL;
+
+$subquery .= implode(" " . PHP_EOL, array_map(function($join) {
+          return $join?? "";
+        }, $view['subqueryJoints']??[])) . PHP_EOL;
+
+// IF SPECIFIC ID IS REQUESTED
+$rid = [];
+if($requested_id){
+  $requested_id = $conn->real_escape_string($requested_id);
+  $rid[] = [$primaryKeyName => [$requested_id]];
+}
+// MAIN TABLE FILTERS
+$allMtFilters = [...$rid, ...$mtFilters??[], ...$viewFilters??[]];
+
+if(count($allMtFilters) > 0){
+  $subquery .= " WHERE " . PHP_EOL;
+  $subquery .= implode(" AND ", array_map(function($filter) {
+    return implode(" AND ", array_map(function($key, $value) {
+      return "$key IN (" . implode(", ", array_map(function($v){return "'".$v."'";},$value)) . ")";
+    }, array_keys($filter), array_values($filter)));
+  }, $allMtFilters)) . PHP_EOL;
+}
+
 $subquery .= " ORDER BY $sortField $sortOrder " . PHP_EOL;
+
+// FILTERING // NO LIMIT WHEN REQUESTING FILTER OPTIONS // ???????
+//if(count($cols??[]) === 0)
 $subquery .= " LIMIT " . ($page - 1) * $limit . ", $limit " . PHP_EOL;
 
-// GENERAL QUERY
+
+
+/**********************************************
+ *                GENERAL QUERY               *
+ **********************************************/
 $sql  = "";
 
 // WITH CTES
@@ -139,7 +208,7 @@ if(count($view['ctes']??[]) > 0){
 // SELECT COLUMNS
 $sql .= " SELECT " . PHP_EOL;
 $sql .= implode(", ", array_map(function($column) {
-          return $column['Field'] ?? ( $column['s'] . " AS " . $column['a'] );
+          return $column['Field']??false ? ("_.".$column['Field']) : ( $column['s'] . " AS " . $column['a'] );
         }, $columnsToSelect)) . PHP_EOL;
 $sql .= " FROM ( " . PHP_EOL;
 $sql .= $subquery;
@@ -153,6 +222,8 @@ $sql .= implode(" " . PHP_EOL, array_map(function($join) {
 
 // ADD CONDITIONS
 
+
+// die($sql);
 
 $response["data"]["sql"] = $sql;
 
