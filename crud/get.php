@@ -21,7 +21,7 @@ $sortRequested = $sortField != 1;
 $sortValidated = !$sortRequested;
 $sortOrder = $_GET['order'] ?? 'asc';
 $cols = $_GET['cols'] ?? null;
-$search = $_GET['search'] ?? "";
+$search = $_GET['search'] ?? null;
 $metacrudView = $_GET['metacrudView'] ?? null;
 $queryDistinct = ($_GET['distinct']??"") == "true" ?? false;
 
@@ -46,7 +46,7 @@ if(!in_array($sortOrder, ['asc', 'desc', 'ASC', 'DESC'])){
  *    SEARCH TERMS    *
  **********************/
 // get rid of any non-alphanumeric characters, but spaces
-$searchQuery = preg_replace('/[^a-zA-Z0-9ñÑ\s]/', '', $search);
+$searchQuery = preg_replace('/[^a-zA-Z0-9ñÑ\s]/', '', $search??"");
 
 // get rid of multiple spaces
 $searchQuery = preg_replace('/\s+/', ' ', $searchQuery);
@@ -110,7 +110,8 @@ $foreignValueColumns = array_map(function($column) {
   }, $foreignValueCols);
 
 // MERGE COLUMNS, VIEW COLUMNS AND FOREIGN VALUE COLUMNS  
-$columnsToSelect = [...$view['columns']??[], ...$columns??[], ...$foreignValueColumns??[]];
+// $columnsToSelect = [...$view['columns']??[], ...$columns??[], ...$foreignValueColumns??[]];
+$columnsToSelect = [...$view['columns']??[], ...$columns??[]];
 
 
 // CHECK IF ANY OF THE EXPRESSIONS IN VIEW HAS AN AGGREGATE FUNCTION
@@ -177,7 +178,7 @@ $foreignValueJoints = array_map(function($column) use ($columns) {
     // foreign table
     $foreignTable = $fkp[2]??null ? ( $fkp[2] . '.' . $fkp[1] ) : $fkp[1];
 
-    return "LEFT JOIN $foreignTable ON $foreignTable." . $fkp[0] . " = _.$mainTableField " . PHP_EOL;
+    return "LEFT JOIN $foreignTable ON $foreignTable." . $fkp[0] . " = _.$mainTableField";
     
   }, $foreignValueCols);
 
@@ -186,6 +187,7 @@ $view['joints'] = array_map(function($join) use ($tablename) {
                   }, $view['joints']??[]);
 
 $gqJoins = [...$foreignValueJoints??[], ...$view['joints']??[]];
+// $gqJoins = [ ...$view['joints']??[]];
 
 
 
@@ -222,21 +224,44 @@ $viewFilters = array_map(function($column) {
  **********************************************/
 $subquery  = " SELECT _.*, ";
 
+// FOREIGN VALUE COLUMNS
+if(count($foreignValueColumns??[]) > 0){
+  $subquery .= PHP_EOL . " ";
+}
+
+$subquery .= implode(", " . PHP_EOL . " ", array_map(function($column) {
+  return $column['s'] . " AS " . $column['a'];
+}, $foreignValueColumns)) . ", ";
+
 // VIEW COLUMN IN SUBQUERY
 $viewColumnsInSubquery = array_filter($view['columns']??[], function($column) {
   return $column['inSubquery']??false;
 });
-$subquery .= PHP_EOL . " " . implode(", ", array_map(function($column) {
-          return $column['s'] . " AS " . $column['a'];
-        }, $viewColumnsInSubquery )) . PHP_EOL;
 
-$subquery  = rtrim($subquery, ", " . PHP_EOL);
+if(count($viewColumnsInSubquery) > 0){
+  $subquery .= PHP_EOL . " ";
+}
+$subquery .= implode(", " . PHP_EOL . " ", array_map(function($column) {
+    return $column['s'] . " AS " . $column['a'];
+  }, $viewColumnsInSubquery )) . ", ";
 
-$subquery .= PHP_EOL . " FROM $tablename _ " . PHP_EOL;
+$subquery  = rtrim($subquery, ", ");
 
-$subquery .= " " . implode(" " . PHP_EOL . " ", array_map(function($join) {
+$subquery .= PHP_EOL . " FROM $tablename _ ";
+
+if(count($foreignValueJoints??[]) > 0){
+  $subquery .= PHP_EOL . " ";
+}
+$subquery .= implode(PHP_EOL . " ", array_map(function($join) {
           return $join?? "";
-        }, $view['subqueryJoints']??[])) . PHP_EOL;
+        }, $foreignValueJoints)) . " ";
+
+if(count($view['subqueryJoints']??[]) > 0){
+  $subquery .= PHP_EOL . " ";
+}
+$subquery .= implode(PHP_EOL . " ", array_map(function($join) {
+          return $join?? "";
+        }, $view['subqueryJoints']??[])) . " ";
 
 // IF SPECIFIC ID IS REQUESTED
 $rid = [];
@@ -265,35 +290,33 @@ if(count($allMtFilters) > 0){
 }
 
 // SEARCH
-$searchQueryFragment = "";
-foreach ($searchTerms as $searchTerm) {
-  $sqf = "(";
-  $sqf .= implode(" OR ", [
-    ...array_map(function($column) use ($tablename, $searchTerm) {
-      return str_replace($tablename.".", "_.", $column['Field']) . " LIKE '%$searchTerm%'";
-    }, array_filter($columns, function($col){ return in_array(explode("(",$col['Type'])[0]??"", ['varchar', 'text', 'char', 'longtext', 'tinytext']); }))??[], 
-    ...array_map(function($column) use ($tablename, $searchTerm) {
-      return $column['s'] . " LIKE '%$searchTerm%'";
-    }, $viewColumnsInSubquery)??[]
-  ]);
-  $sqf .= ")";
-  $sqf .= PHP_EOL . " AND ";
-  $searchQueryFragment .= $sqf;
-}
-$searchQueryFragment = rtrim($searchQueryFragment, " AND ");
+if($search) {
+  $searchQueryFragment = "";
+  foreach ($searchTerms as $searchTerm) {
+    $sqf = "(";
+    $sqf .= implode(" OR ", [
+      ...array_map(function($column) use ($tablename, $searchTerm) {
+        return "_.".str_replace($tablename.".", "", $column['Field']) . " LIKE '%$searchTerm%'";
+      }, array_filter($columns, function($col){ return in_array(explode("(",$col['Type'])[0]??"", ['varchar', 'text', 'char', 'longtext', 'tinytext']); }))??[], 
+      ...array_map(function($column) use ($tablename, $searchTerm) {
+        return $column['s'] . " LIKE '%$searchTerm%'";
+      }, $viewColumnsInSubquery)??[],
+      ...array_map(function($column) use ($tablename, $searchTerm) {
+        return $column['s'] . " LIKE '%$searchTerm%'";
+      }, $foreignValueColumns)??[]
+    ]);
+    $sqf .= ")";
+    $sqf .= PHP_EOL . " AND ";
+    $searchQueryFragment .= $sqf;
+  }
+  $searchQueryFragment = rtrim($searchQueryFragment, " AND ");
 
-if($searchQueryFragment !== "") {
-  $subquery .= " AND ( " . $searchQueryFragment . " ) " . PHP_EOL;
-}
+  if($searchQueryFragment !== "") {
+    $subquery .= " AND ( " . $searchQueryFragment . " ) " . PHP_EOL;
+  }
 
-// foreach($columns as $column) {
-//   $searchQueryFragment = "";
-//   foreach ($searchTerms as $searchTerm) {
-//     $searchQueryFragment .= " AND ( " . str_replace($tablename.".", "_.", $column['s']) . " LIKE '%$searchTerm%' ) ";
-//   }
-//   $subquery .= " AND ( " . $searchQueryFragment . " ) " . PHP_EOL;
-  
-// }
+} // SEARCH
+
 
 $subquery .= " ORDER BY $sortField $sortOrder " . PHP_EOL;
 
@@ -317,16 +340,21 @@ if(count($view['ctes']??[]) > 0){
 }
 
 // SELECT COLUMNS
-$sql .= "SELECT " . PHP_EOL;
-$sql .= implode(", ", array_map(function($column) use ($tablename) {
+$sql .= "SELECT _.*, ";
+if(count($view['columns']??[]) > 0){
+  $sql .= PHP_EOL;
+}
+$sql .= implode(", " . PHP_EOL, array_map(function($column) use ($tablename) {
         if(isset($column['s']['var'])){
           return getVarValue($column['s']['var']) . " AS " . $column['a'] ;
         }
         return $column['Field']??false ? 
           ("_.".$column['Field']) :
           ( str_replace($tablename.".", "_.", $column['s']) . " AS " . $column['a'] );
-        }, $columnsToSelect)) . PHP_EOL;
-$sql .= "FROM ( " . PHP_EOL;
+        }, array_filter($view['columns']??[],function($col){ return !($col['inSubquery']??false); })??[])) . ", ";
+        // }, $columnsToSelect)) . PHP_EOL;
+$sql = rtrim($sql, ", ");
+$sql .= PHP_EOL . "FROM ( ";
 $sql .= $subquery;
 $sql .= " ) AS _ " . PHP_EOL;
 
@@ -350,7 +378,7 @@ $sql = rtrim($sql, " AND " . PHP_EOL);
 $sql .= PHP_EOL . $groupBy;
 
 
-die($sql);
+// die($sql);
 
 $response["data"]["sql"] = $sql;
 
