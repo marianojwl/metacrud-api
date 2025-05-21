@@ -16,7 +16,7 @@ $response = ["success"=>false, "data"=>["executionTime"=>null]];
  ******************/
 $page = $_GET['page'] ?? 1;
 $limit = $_GET['limit'] ?? 10;
-$sortField = $_GET['sort'] ?? 1;
+$sortField = 1; //$_GET['sort'] ?? 1;
 $sortRequested = $sortField != 1;
 $sortValidated = !$sortRequested;
 $sortOrder = $_GET['order'] ?? 'asc';
@@ -71,10 +71,6 @@ if($metacrudView) {
 // GET COLUMNS
 $columns = getColumns($pdo, $tablename);
 
-// FILTER COLUMN REQUESTED
-$filterColumn = array_values(array_filter($columns, function($column) use($controller) {
-  return @$column['Field'] == $controller || @$column['Comment']['metacrud']['a'] == $controller;
-}))[0]??null;
 
 
 // GET PRIMARY KEY NAME
@@ -99,6 +95,14 @@ $foreignValueColumns = array_map(function($column) {
 
 // MERGE COLUMNS, VIEW COLUMNS AND FOREIGN VALUE COLUMNS  
 $columnsToSelect = [...$view['columns']??[], ...$columns??[], ...$foreignValueColumns??[]];
+
+
+// FILTER COLUMN REQUESTED
+$filterColumn = array_values(array_filter($columnsToSelect, function($column) use($controller) {
+  return @$column['Field'] == $controller || @$column['Comment']['metacrud']['a'] == $controller || @$column['a'] == $controller;
+}))[0]??null;
+
+
 
 $columnsToSelect = array_values(array_filter($columnsToSelect, function($column) use($filterColumn) {
   global $sortField;
@@ -130,11 +134,11 @@ $foreignValueJoints = array_map(function($column) use ($columns) {
     // foreign table
     $foreignTable = $fkp[2]??null ? ( $fkp[2] . '.' . $fkp[1] ) : $fkp[1];
 
-    return "LEFT JOIN $foreignTable ON $foreignTable." . $fkp[0] . " = _.$mainTableField " . PHP_EOL;
+    return "LEFT JOIN $foreignTable ON $foreignTable." . $fkp[0] . " = _.$mainTableField";
     
   }, $foreignValueCols);
 
-$gqJoins = [...$foreignValueJoints??[], ...$view['joints']??[], ...$view['subqueryJoints']??[]];
+$gqJoins = [...$foreignValueJoints??[], ...$view['subqueryJoints']??[]];
 // remove duplicates
 $gqJoins = array_unique($gqJoins, SORT_STRING);
 $gqJoins = array_values(array_filter($gqJoins, function($join) {
@@ -146,14 +150,17 @@ $gqJoins = array_values(array_filter($gqJoins, function($join) {
 /********************************************************
  *            MAIN TABLE SUBQUERY OWN FILTERS           *
  *******************************************************/
-$mtFilters = array_map(function($column) use ($cols) {
+$mtFilters = array_map(function($column) {
     $key = $column['Field']; // ?? $column['a'];
     if(!$key) return null;
     return [ $key => $_GET[$key] ];
-}, array_values(array_filter($columns, function($column) {
+}, array_values(array_filter($columns, function($column) use ($filterColumn) {
     $key = $column['Field'] ?? null;
     if(!$key) return false;
-    if(in_array($key, $cols??[])) return false;
+    if(@$filterColumn['a'] && @$column['a'] == $filterColumn['a'] ) return false;
+    if(@$filterColumn['Field'] && $column['Field'] == @$filterColumn['Field'] ) return false;
+    if(@$filterColumn['Comment']['metacrud']['a'] && $filterColumn['Comment']['metacrud']['a'] == $column['Comment']['metacrud']['a']) return false;
+
     return (is_array($_GET[$key]??null));
   })));
 
@@ -183,14 +190,14 @@ $subquery  = "SELECT DISTINCT " . PHP_EOL;
 //         }, $columnsToSelect)) . ", " . PHP_EOL;
 foreach($columnsToSelect as $cts) {
   if(@$cts['Field']) {
-    $subquery .= $cts['Field'] . ", " . PHP_EOL;
+    $subquery .= "_." . $cts['Field'] . ", " . PHP_EOL;
   } else if(@$cts['s'] && @$cts['a']) {
     $subquery .= $cts['s'] . " AS " . $cts['a'] . ", " . PHP_EOL;
   } else {}
 }
 
 $subquery  = rtrim($subquery, ", " . PHP_EOL);
-
+$subquery .= " " . PHP_EOL;
   
 // VIEW COLUMN IN SUBQUERY
 // $subquery .= implode(", ", array_map(function($column) {
@@ -201,11 +208,11 @@ $subquery  = rtrim($subquery, ", " . PHP_EOL);
 
 // $subquery  = rtrim($subquery, ", ") . PHP_EOL;
 
-$subquery .= " FROM $tablename " . PHP_EOL;
+$subquery .= "FROM $tablename _" . PHP_EOL;
 
 $subquery .= implode(" " . PHP_EOL, array_map(function($join) {
           return $join?? "";
-        }, $gqJoins)) . PHP_EOL;
+        }, $gqJoins)) . " " . PHP_EOL;
 
 // MAIN TABLE FILTERS
 $allMtFilters = [...$mtFilters??[],...$viewFilters??[]];
@@ -214,18 +221,23 @@ if(count($allMtFilters) > 0){
   $subquery .= " WHERE " . PHP_EOL;
   $subquery .= implode(" AND ", array_map(function($filter) {
     return implode(" AND ", array_map(function($key, $value) {
-      return "$key IN (" . implode(", ", array_map(function($v){return "'".$v."'";},$value)) . ")";
+      $q = "( $key IN (" . implode(", ", array_map(function($v){return "'".$v."'";},$value)) . ")";
+      if($value[0] == ""){
+        $q .= " OR $key IS NULL";
+      }
+      $q .= " )";
+      return $q;
     }, array_keys($filter), array_values($filter)));
   }, $allMtFilters)) . PHP_EOL;
 }
 
-$subquery .= " ORDER BY $sortField ASC " . PHP_EOL;
+$subquery .= "ORDER BY $sortField ASC " . PHP_EOL;
 
 // FILTERING // NO LIMIT WHEN REQUESTING FILTER OPTIONS // ???????
 //if(count($cols??[]) === 0)
-$subquery .= " LIMIT 1000";
+$subquery .= "LIMIT 1000";
 
-die($subquery);
+// die($subquery);
 
 $response["data"]["sql"] = $subquery;
 

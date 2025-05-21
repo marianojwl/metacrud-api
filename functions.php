@@ -227,3 +227,29 @@ function generateCombinations($arrays, $prefix = []) {
   
   return $result;
 }
+
+// GET VARIABLE VALUE
+function getVarValue($var) {
+  $parts = explode('.', $var);
+  $first = array_shift($parts);
+
+  // Determinar la variable base
+  switch ($first) {
+      case '_SESSION':
+          $value = $_SESSION;
+          break;
+      default:
+          return null; // No es una variable válida
+  }
+
+  // Recorrer los niveles de la variable
+  foreach ($parts as $part) {
+      if (!isset($value[$part])) {
+          return null; // Retorna null si la clave no existe
+      }
+      $value = $value[$part];
+  }
+
+  // Si es un array, formatearlo como una cadena para SQL
+  return is_array($value) ? ("('" . implode("','", $value) . "')") : $value;
+}
