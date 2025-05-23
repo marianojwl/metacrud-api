@@ -42,6 +42,19 @@ if(!in_array($sortOrder, ['asc', 'desc', 'ASC', 'DESC'])){
 
 
 
+/**********************
+ *    SEARCH TERMS    *
+ **********************/
+// get rid of any non-alphanumeric characters, but spaces
+$searchQuery = preg_replace('/[^a-zA-Z0-9ñÑ\s]/', '', $search??"");
+
+// get rid of multiple spaces
+$searchQuery = preg_replace('/\s+/', ' ', $searchQuery);
+
+// get terms
+$searchTerms = explode(' ', $searchQuery);
+
+
 /**************
  * TABLE META *
  **************/
@@ -93,6 +106,12 @@ $foreignValueColumns = array_map(function($column) {
     return ["s" => $column['Comment']['metacrud']['foreign_value'], "a" => str_replace(".", "_", $column['Comment']['metacrud']['foreign_value'])];
   }, $foreignValueCols);
 
+
+// VIEW COLUMN IN SUBQUERY
+$viewColumnsInSubquery = array_filter($view['columns']??[], function($column) {
+  return $column['inSubquery']??false;
+});
+
 // MERGE COLUMNS, VIEW COLUMNS AND FOREIGN VALUE COLUMNS  
 $columnsToSelect = [...$view['columns']??[], ...$columns??[], ...$foreignValueColumns??[]];
 
@@ -119,6 +138,38 @@ $columnsToSelect = array_values(array_filter($columnsToSelect, function($column)
 }));
 
 
+
+/********************************************
+ *            READ RESTRICTIONS             *
+ ********************************************/
+// BUILD RESTRICTION FUNCTION
+$mainTableAlias = "_";
+function buildRestriction($restriction){
+  global $tablename, $mainTableAlias, $conn;
+  if(is_string($restriction['operands'][0])){
+    return  " (" . str_replace($tablename.".", $mainTableAlias.".",$restriction['operands'][0]) . " " . $restriction['operator'] . " " . ( 
+      (isset($restriction['operands'][1]['var']) ?
+        getVarValue($restriction['operands'][1]['var']) :
+        (is_array($restriction['operands'][1]) ?
+          "('" . implode("','", str_replace($tablename.".", $mainTableAlias.".", $restriction['operands'][1])) . "')" : 
+          ("'".$conn->real_escape_string(str_replace($tablename.".", $mainTableAlias.".", $restriction['operands'][1]) )."'") 
+        )
+      )
+    ) . ") ";
+ } else {
+    return implode($restriction['operator'], array_map(function($operand) { return " (".buildRestriction($operand).") "; }, $restriction['operands']));
+  }
+}
+// RESTRICTIONS
+$restrictions = [
+  ...$tableStatus['Comment']['metacrud']['restrictions']['read']??[]
+  // ...$view['restrictions']['read']??[]
+];
+
+$restr="";
+if(count($restrictions) > 0){
+  $restr = " AND " . buildRestriction($restrictions, $conn);
+}
 
 /********************************************
  *           GENERAL QUERY JOINS            *
@@ -214,13 +265,19 @@ $subquery .= implode(" " . PHP_EOL, array_map(function($join) {
           return $join?? "";
         }, $gqJoins)) . " " . PHP_EOL;
 
+
 // MAIN TABLE FILTERS
-$allMtFilters = [...$mtFilters??[],...$viewFilters??[]];
+$allMtFilters = [ ...$mtFilters??[], ...$viewFilters??[]];
+
+$subquery .= " WHERE 1=1 " . PHP_EOL;
+
+// RESTRICTIONS
+$subquery .= $restr . PHP_EOL;
 
 if(count($allMtFilters) > 0){
-  $subquery .= " WHERE " . PHP_EOL;
-  $subquery .= implode(" AND ", array_map(function($filter) {
-    return implode(" AND ", array_map(function($key, $value) {
+  $subquery .= " AND ";
+  $subquery .= implode(PHP_EOL." AND ", array_map(function($filter) {
+    return implode(PHP_EOL." AND ", array_map(function($key, $value) {
       $q = "( $key IN (" . implode(", ", array_map(function($v){return "'".$v."'";},$value)) . ")";
       if($value[0] == ""){
         $q .= " OR $key IS NULL";
@@ -230,6 +287,34 @@ if(count($allMtFilters) > 0){
     }, array_keys($filter), array_values($filter)));
   }, $allMtFilters)) . PHP_EOL;
 }
+
+// SEARCH
+if($search) {
+  $searchQueryFragment = "";
+  foreach ($searchTerms as $searchTerm) {
+    $sqf = "(";
+    $sqf .= implode(" OR ", [
+      ...array_map(function($column) use ($tablename, $searchTerm) {
+        return "_.".str_replace($tablename.".", "", $column['Field']) . " LIKE '%$searchTerm%'";
+      }, array_filter($columns, function($col){ return in_array(explode("(",$col['Type'])[0]??"", ['varchar', 'text', 'char', 'longtext', 'tinytext']); }))??[], 
+      ...array_map(function($column) use ($tablename, $searchTerm) {
+        return $column['s'] . " LIKE '%$searchTerm%'";
+      }, $viewColumnsInSubquery)??[],
+      ...array_map(function($column) use ($tablename, $searchTerm) {
+        return $column['s'] . " LIKE '%$searchTerm%'";
+      }, $foreignValueColumns)??[]
+    ]);
+    $sqf .= ")";
+    $sqf .= PHP_EOL . " AND ";
+    $searchQueryFragment .= $sqf;
+  }
+  $searchQueryFragment = rtrim($searchQueryFragment, " AND ");
+
+  if($searchQueryFragment !== "") {
+    $subquery .= " AND ( " . $searchQueryFragment . " ) " . PHP_EOL;
+  }
+
+} // SEARCH
 
 $subquery .= "ORDER BY $sortField ASC " . PHP_EOL;
 

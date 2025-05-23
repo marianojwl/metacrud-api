@@ -51,13 +51,10 @@ $searchQuery = preg_replace('/[^a-zA-Z0-9ñÑ\s]/', '', $search??"");
 // get rid of multiple spaces
 $searchQuery = preg_replace('/\s+/', ' ', $searchQuery);
 
-// $searchQueryFragment = "";
-
+// get terms
 $searchTerms = explode(' ', $searchQuery);
 
-// foreach ($searchTerms as $searchTerm) {
-//     $searchQueryFragment .= " AND (LPAD(cs_tabla_productos.sku,4,0) LIKE '%$searchTerm%' OR cs_tabla_productos.titulo LIKE '%$searchTerm%' OR cs_tabla_productos.variante LIKE '%$searchTerm%')";
-// }
+
 
 
 /**************
@@ -138,7 +135,7 @@ if($hasAggregate){
  *            READ RESTRICTIONS             *
  ********************************************/
 // BUILD RESTRICTION FUNCTION
-/*
+$mainTableAlias = "_";
 function buildRestriction($restriction){
   global $tablename, $mainTableAlias, $conn;
   if(is_string($restriction['operands'][0])){
@@ -156,13 +153,16 @@ function buildRestriction($restriction){
   }
 }
 // RESTRICTIONS
-$restrictions = $tableStatus['Comment']['metacrud']['restrictions']['read']??[];
+$restrictions = [
+  ...$tableStatus['Comment']['metacrud']['restrictions']['read']??[]
+  // ...$view['restrictions']['read']??[]
+];
 
-
+$restr="";
 if(count($restrictions) > 0){
-  $restr= buildRestriction($restrictions, $conn) . " AND " . PHP_EOL;
+  $restr = " AND " . buildRestriction($restrictions, $conn);
 }
-*/
+
 
 /********************************************
  *           GENERAL QUERY JOINS            *
@@ -275,6 +275,9 @@ $allMtFilters = [...$rid, ...$mtFilters??[], ...$viewFilters??[]];
 
 $subquery .= " WHERE 1=1 " . PHP_EOL;
 
+// RESTRICTIONS
+$subquery .= $restr . PHP_EOL;
+
 if(count($allMtFilters) > 0){
   $subquery .= " AND ";
   $subquery .= implode(PHP_EOL." AND ", array_map(function($filter) {
@@ -376,6 +379,8 @@ $sql = rtrim($sql, " AND " . PHP_EOL);
 
 // ADD GROUP BY
 $sql .= PHP_EOL . $groupBy;
+
+$sql .= " ORDER BY $sortField $sortOrder " . PHP_EOL;
 
 
 // die($sql);
