@@ -267,7 +267,7 @@ $subquery .= implode(PHP_EOL . " ", array_map(function($join) {
 $rid = [];
 if($requested_id){
   $requested_id = $conn->real_escape_string($requested_id);
-  $rid[] = [$primaryKeyName => [$requested_id]];
+  $rid[] = ["_.".$primaryKeyName => [$requested_id]];
 }
 
 // MAIN TABLE FILTERS
