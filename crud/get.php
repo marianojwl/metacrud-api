@@ -231,7 +231,7 @@ if(count($foreignValueColumns??[]) > 0){
 
 $subquery .= implode(", " . PHP_EOL . " ", array_map(function($column) {
   return $column['s'] . " AS " . $column['a'];
-}, $foreignValueColumns)) . ", ";
+}, $foreignValueColumns)) . (count($foreignValueColumns??[])?", ":" ") ;
 
 // VIEW COLUMN IN SUBQUERY
 $viewColumnsInSubquery = array_filter($view['columns']??[], function($column) {
