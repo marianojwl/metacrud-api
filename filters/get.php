@@ -132,7 +132,7 @@ $columnsToSelect = array_values(array_filter($columnsToSelect, function($column)
     return @$column['s'] == $filterColumn['Comment']['metacrud']['foreign_value'] || @$column['s'] == $filterColumn['Comment']['metacrud']['foreign_key'];
   }
   if( @$filterColumn['a'] && @$filterColumn['filterBy'] ) {
-    return @$column['a'] == $filterColumn['filterBy'] || @$column['a'] == $filterColumn['a'];
+    return @$column['a'] == $filterColumn['filterBy'] || @$column['a'] == $filterColumn['a'] || @$column['Field'] == $filterColumn['filterBy'];
   }
   return false;
 }));
@@ -278,6 +278,10 @@ if(count($allMtFilters) > 0){
   $subquery .= " AND ";
   $subquery .= implode(PHP_EOL." AND ", array_map(function($filter) {
     return implode(PHP_EOL." AND ", array_map(function($key, $value) {
+      // if $key contains no dots, it is a regular column
+      if(strpos($key, ".") === false){
+        $key = "_." . $key;
+      }
       $q = "( $key IN (" . implode(", ", array_map(function($v){return "'".$v."'";},$value)) . ")";
       if($value[0] == ""){
         $q .= " OR $key IS NULL";
@@ -322,7 +326,7 @@ $subquery .= "ORDER BY $sortField ASC " . PHP_EOL;
 //if(count($cols??[]) === 0)
 $subquery .= "LIMIT 1000";
 
-// die($subquery);
+//die($subquery);
 
 $response["data"]["sql"] = $subquery;
 

@@ -154,8 +154,8 @@ function buildRestriction($restriction){
 }
 // RESTRICTIONS
 $restrictions = [
-  ...$tableStatus['Comment']['metacrud']['restrictions']['read']??[]
-  // ...$view['restrictions']['read']??[]
+  ...($tableStatus['Comment']['metacrud']['restrictions']['read']??[]),
+  ...($view['restrictions']['read']??[])
 ];
 
 $restr="";
@@ -197,7 +197,7 @@ $gqJoins = [...$foreignValueJoints??[], ...$view['joints']??[]];
 $mtFilters = array_map(function($column) {
     $key = $column['Field']; // ?? $column['a'];
     if(!$key) return null;
-    return [ $key => $_GET[$key] ];
+    return [ "_." . $key => $_GET[$key] ];
 }, array_values(array_filter($columns, function($column) {
     $key = $column['Field']; // ?? $column['a'];
     if(!$key) return false;
@@ -300,7 +300,7 @@ if($search) {
     $sqf .= implode(" OR ", [
       ...array_map(function($column) use ($tablename, $searchTerm) {
         return "_.".str_replace($tablename.".", "", $column['Field']) . " LIKE '%$searchTerm%'";
-      }, array_filter($columns, function($col){ return in_array(explode("(",$col['Type'])[0]??"", ['varchar', 'text', 'char', 'longtext', 'tinytext']); }))??[], 
+      }, array_filter($columns, function($col){ return in_array(explode("(",$col['Type'])[0]??"", ['date', 'varchar', 'text', 'char', 'longtext', 'tinytext']); }))??[], 
       ...array_map(function($column) use ($tablename, $searchTerm) {
         return $column['s'] . " LIKE '%$searchTerm%'";
       }, $viewColumnsInSubquery)??[],
@@ -343,9 +343,9 @@ if(count($view['ctes']??[]) > 0){
 }
 
 // SELECT COLUMNS
-$sql .= "SELECT _.*, ";
+$sql .= "SELECT _.* ";
 if(count($view['columns']??[]) > 0){
-  $sql .= PHP_EOL;
+  $sql .= ", ";
 }
 $sql .= implode(", " . PHP_EOL, array_map(function($column) use ($tablename) {
         if(isset($column['s']['var'])){
@@ -382,8 +382,9 @@ $sql .= PHP_EOL . $groupBy;
 
 $sql .= " ORDER BY $sortField $sortOrder " . PHP_EOL;
 
-
-// die($sql);
+// patch: replace any ", ," with ", "
+//$sql = preg_replace('/, ,/', ', ', $sql);
+//  die($sql);
 
 $response["data"]["sql"] = $sql;
 
