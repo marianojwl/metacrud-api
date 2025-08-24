@@ -41,7 +41,7 @@ foreach ($fieldsToInsert as $column) {
   // validate all values in $input[$column['Field'] array
   foreach ($input[$column['Field']] as $value) { // ****
     // CHECK IF REQUIRED
-    if(( $column['Null'] == 'NO' && empty($column['Default']) ) && empty($value)){
+    if(( $column['Null'] == 'NO' && empty($column['Default']) ) && (empty($value) && $value!==0 && $value!=="0" )){
       echo json_encode(['error' => ($column['Comment']['metacrud']['label']??$column['Field']) . ' requerido. Valor vacío encontrado.']);
       http_response_code(400);
       exit;
