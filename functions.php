@@ -9,6 +9,20 @@ function getColumns($pdo, $tablename){
   // array map to json enconde every column's Comment
   $columns = array_map(function($column) {
       $column['Comment'] = json_decode($column['Comment'], true);
+
+      if(!empty($column['Comment']['metacrud']['default_value'])){
+        // if starts with $_SESSION.
+        if(strpos($column['Comment']['metacrud']['default_value'], '$_SESSION') === 0){
+          $parts = explode('.', $column['Comment']['metacrud']['default_value']);
+          array_shift($parts);
+          $session = $_SESSION;
+          foreach($parts as $part){
+            $session = $session[$part];
+          }
+          $column['Comment']['metacrud']['default_value'] = $session;
+        }
+      }
+      
       return $column;
   }, $columns);
 

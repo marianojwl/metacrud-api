@@ -46,7 +46,7 @@ namespace marianojwl\XLSReader {
             $unixTimestamp = ($rawValue - 25569) * 86400;
 
             // Format as date
-            $rawValue = gmdate("Y-m-d", $unixTimestamp);
+            $rawValue = gmdate($outputFormat, $unixTimestamp);
             
           } catch (\Throwable  $e) {
             throw new \Exception("Error parsing date: " . $e->getMessage());
@@ -201,6 +201,7 @@ namespace marianojwl\XLSReader {
       $inDataArea = false;
       $startOffset = $this->template['setMarkers']['values']['startOffset'];
       $endOffset = $this->template['setMarkers']['values']['endOffset'];
+      $ignoreRules = $this->template['setMarkers']['values']['ignore'] ?? [];
       $setMetaDataStructure = $this->getSetLevelMetaDataStructureFromTemplate();
       $j = -1;
       foreach($this->rows as $i => $row) {
@@ -255,6 +256,19 @@ namespace marianojwl\XLSReader {
 
         // IF IN SET, ADD DATA
         if($inDataArea){
+          // check if row should be ignored  -- added at 2026-06-26 *******************
+          $ignoreRow = false;
+          foreach($ignoreRules as $rule) {
+            if(isset($row[$rule['column']-1]) && preg_match('/'.$rule['regexMatch'].'/', $row[$rule['column']-1])){
+              $ignoreRow = true;
+              break;
+            }
+          }
+          if($ignoreRow) {
+            continue;
+          }
+          // end of check if row should be ignored *****************************
+        
           $newRow = $newSetMetaData;
 
           // ADD META DATA

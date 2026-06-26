@@ -1,5 +1,7 @@
 <?php
 
+// deprecated, use getColumns function instead
+
 $stmt = $pdo->prepare("SHOW FULL COLUMNS FROM $tablename");
 $stmt->execute();
 $columns = $stmt->fetchAll(PDO::FETCH_ASSOC);
