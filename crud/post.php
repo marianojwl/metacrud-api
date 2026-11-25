@@ -7,10 +7,19 @@ $columnsWithBathCreationAllowed = array_filter($columns, function($column){
   return $column['Comment']['metacrud']['allowBatchCreate'] ?? false;
 });
 
+$columnsWithDefaultVar = array_filter($columns, function($column){
+  return isset($column['Comment']['metacrud']['default']);
+});
+foreach ($columnsWithDefaultVar as $column) {
+  $input[$column['Field']] = getVarFromString($column['Comment']['metacrud']['default']);
+}
+
 $fieldsToInsert= array_filter($columns, function($column) use ($input){
   //return (isset($input[$column['Field']]) && !($column['Key'] == 'PRI' && $column['Extra'] == 'auto_increment'));
   return (array_key_exists($column['Field'], $input) && !($column['Key'] == 'PRI' && $column['Extra'] == 'auto_increment'));
 });
+
+// $fieldsToInsert = array_merge($fieldsToInsert, $columnsWithDefaultVar);
 
 // check if any contains arrays
 $arrayInputColumns = array_filter($fieldsToInsert, function($column) use ($input){

@@ -186,6 +186,20 @@ function getPrimaryKeyName($columns){
     return user_roles?.some(role => table_meta?.permissions[action]?.includes(role));
   };
 */
+function getVarFromString($str){
+  $parts = explode('.', $str);
+  $p0 = null;
+  if($parts[0] === '$_SESSION') { $p0 = $_SESSION; }
+  if($parts[0] === null) { return null; }
+
+  $p  = $p0;
+  for($i=1;$i<count($parts);$i++){
+    // if(!isset($p[$parts[$i]])) { return null;}
+    $p = $p[$parts[$i]];
+  }
+  return $p;
+}
+
 function getUserPermissions($userPermissionsVars){
   // {"metacrud":{"userPermissionsVar":["$_SESSION.Cinemacenter-INTRANET.metacrud.perfiles_ids"], "permissions": { "create": [7], "update":[7], "delete":[7], "read":[7] }}}
   if(!$userPermissionsVars) return [];
